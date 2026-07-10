@@ -1,0 +1,209 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ------------------------------------------------------
+// 1. IDENTITY & ACCESS MANAGEMENT
+// ------------------------------------------------------
+
+model Company {
+  id           Int        @id @default(autoincrement())
+  name         String
+  contactEmail String
+  status       String     @default("PENDING") // PENDING, ACTIVE, SUSPENDED
+  createdAt    DateTime   @default(now())
+  
+  // Relations
+  users        User[]
+  locations    Location[]
+  tariffs      Tariff[]
+  apiKeys      ApiKey[]
+}
+
+model User {
+  id              Int        @id @default(autoincrement())
+  email           String     @unique
+  password        String
+  name            String?    
+  phoneNumber     String?
+  avatarUrl       String?    @db.Text // Swapped from VarChar(Max) to Text for MySQL
+  locationStr     String?    // Operational branch/location address reference
+  
+  role            String     @default("COMPANY_ADMIN") 
+  isActivated     Boolean    @default(false)
+  activationToken String?    @unique
+  status          String     @default("ACTIVE")    // ACTIVE, SUSPENDED, DISABLED
+  createdAt       DateTime   @default(now())
+  
+  // Relations
+  companyId       Int?
+  company         Company?   @relation(fields: [companyId], references: [id])
+  auditLogs       AuditLog[]
+}
+
+// ------------------------------------------------------
+// 2. INFRASTRUCTURE & OPEN DATA MODERATION
+// ------------------------------------------------------
+
+model Location {
+  id            Int           @id @default(autoincrement())
+  name          String        // e.g., "Spencer 000024"
+  address       String
+  postcode      String
+  latitude      Float
+  longitude     Float
+  amenities     String?       // e.g., "Cafe, Restroom, WiFi"
+  
+  // --- NEW EXPLICIT OCPI DATA ATTRIBUTES ---
+  countryCode   String        @default("GB")
+  partyId       String        @default("CEV")
+  city          String        @default("Unknown City")
+  state         String?       
+  countryISO    String        @default("GBR")
+  parkingType   String        @default("UNKNOWN")
+  timeZone      String        @default("Europe/London")
+
+  // Moderation Engine
+  isApproved    Boolean       @default(false)
+  rejectionNote String?
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  companyId     Int
+  company       Company       @relation(fields: [companyId], references: [id])
+  chargePoints  ChargePoint[]
+  media         Media[]       
+}
+
+model ChargePoint {
+  id            Int         @id @default(autoincrement())
+  hardwareId    String      @unique // Acts as the root unique device cross-reference key
+  status        String      @default("UNKNOWN") // AVAILABLE, OCCUPIED, FAULTED, UNKNOWN
+  
+  // --- NEW OCPI EVSE ATTRIBUTES ---
+  floorLevel    String?
+  
+  // Moderation Engine
+  isApproved    Boolean     @default(false)
+  rejectionNote String?
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  locationId    Int
+  location      Location    @relation(fields: [locationId], references: [id])
+  connectors    Connector[] 
+  media         Media[]     
+}
+
+model Connector {
+  id            Int         @id @default(autoincrement())
+  type          String      // AC, CCS, CHADEMO
+  maxPowerKw    Float       // Dynamic capacity parsing index mapping variable
+  status        String      @default("AVAILABLE")
+  
+  // --- NEW OCPI CONNECTOR DETAILS ---
+  standard      String      @default("IEC_62196_T2") // IEC_62196_T2, IEC_62196_T2_COMBO, CHADEMO
+  format        String      @default("SOCKET")       // CABLE, SOCKET
+  powerType     String      @default("AC_3_PHASE")   // AC_1_PHASE, AC_3_PHASE, DC
+  voltage       Int         @default(230)
+  amperage      Int         @default(32)
+
+  // Relations
+  chargePointId Int
+  chargePoint   ChargePoint @relation(fields: [chargePointId], references: [id])
+  
+  tariffId      Int?
+  tariff        Tariff?     @relation(fields: [tariffId], references: [id])
+  
+  sessions      Session[]
+}
+
+// ------------------------------------------------------
+// 3. COMMERCIALS, OPERATIONS & AUDIT LOGS
+// ------------------------------------------------------
+
+model Tariff {
+  id          Int         @id @default(autoincrement())
+  name        String      
+  pricePerKwh Float
+  currency    String      @default("GBP")
+  
+  // Relations
+  companyId   Int
+  company     Company     @relation(fields: [companyId], references: [id])
+  connectors  Connector[]
+}
+
+model Session {
+  id          Int       @id @default(autoincrement())
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  kwhConsumed Float     @default(0)
+  totalCost   Float     @default(0)
+  status      String    @default("ACTIVE") // ACTIVE, COMPLETED, FAULTED
+  
+  // Relations
+  connectorId Int
+  connector   Connector @relation(fields: [connectorId], references: [id])
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Media {
+  id            Int          @id @default(autoincrement())
+  url           String       
+  type          String       
+  uploadedAt    DateTime     @default(now())
+
+  // Relations - Optional fields allow SetNull/Restrict in MySQL smoothly
+  locationId    Int?
+  location      Location?    @relation(fields: [locationId], references: [id])
+  
+  chargePointId Int?
+  chargePoint   ChargePoint? @relation(fields: [chargePointId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String   
+  entity    String   
+  entityId  Int      
+  details   String   
+  timestamp DateTime @default(now())
+
+  // Relations
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  name      String   // e.g., "ZapMap Production Key"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id])
+}
+
+model SystemConfig {
+  id               Int      @id @default(autoincrement())
+  globalAlert      Boolean  @default(false)
+  alertMessage     String   @db.VarChar(1000)
+  locationsBlocked Boolean  @default(false)
+  tariffsBlocked   Boolean  @default(false)
+  portalBlocked    Boolean  @default(false)
+  keysBlocked      Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}

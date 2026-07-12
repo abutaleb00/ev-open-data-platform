@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // 1. READ ALL: Fetch multi-tenant companies with dynamically rolled-up hardware counts
 exports.getAllCompanies = async (req, res) => {
     try {
@@ -50,6 +55,7 @@ exports.getAllCompanies = async (req, res) => {
 exports.createCompany = async (req, res) => {
     try {
         const { name, contactEmail } = req.body;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         if (!name || !contactEmail) {
             return res.status(400).json({ success: false, message: "Missing required profile metadata parameters." });
@@ -63,13 +69,14 @@ exports.createCompany = async (req, res) => {
             }
         });
 
-        // Log this action to the audit track ledger
+        // Log this action to the audit track ledger along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'COMPANY',
                 entityId: company.id,
                 details: `Administrative creation of company container: "${name}".`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: req.user.id
             }
         });
@@ -86,6 +93,7 @@ exports.updateCompany = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, contactEmail } = req.body;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         const company = await prisma.company.update({
             where: { id: parseInt(id) },
@@ -98,6 +106,7 @@ exports.updateCompany = async (req, res) => {
                 entity: 'COMPANY',
                 entityId: company.id,
                 details: `Company metadata aligned. Modified targets: Name: "${name}", Email: "${contactEmail}".`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: req.user.id
             }
         });
@@ -109,11 +118,12 @@ exports.updateCompany = async (req, res) => {
     }
 };
 
-// 4. DESTRUCTIVE PURGE TRANSACTION: Cascade-drop relational constraints to bypass SQL Server blocks
+// 4. DESTRUCTIVE PURGE TRANSACTION: Cascade-drop relational constraints
 exports.deleteCompany = async (req, res) => {
     try {
         const { id } = req.params;
         const companyIdInt = parseInt(id);
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Execute dynamic cascaded drop inside a Prisma transaction to clear NoAction foreign limits
         await prisma.$transaction(async (tx) => {
@@ -134,7 +144,7 @@ exports.deleteCompany = async (req, res) => {
                 const cpIds = await tx.chargePoint.findMany({
                     where: { locationId: { in: locationIds } },
                     select: { id: true }
-                }).then(cps => cps.map(c => c.id)); // FIXED: Removed leaked global syntax reference loop `cps => d = ...`
+                }).then(cps => cps.map(c => c.id));
 
                 if (cpIds.length > 0) {
                     // 4. Find nested child terminal connectors
@@ -164,6 +174,18 @@ exports.deleteCompany = async (req, res) => {
             await tx.company.delete({ where: { id: companyIdInt } });
         });
 
+        // Log final asset deletion drop sequence status to audit tracking ledger
+        await prisma.auditLog.create({
+            data: {
+                action: 'DELETE',
+                entity: 'COMPANY',
+                entityId: companyIdInt,
+                details: `Permanently deleted company partition [ID: ${companyIdInt}] and all associated infrastructure cascading elements.`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                userId: req.user.id
+            }
+        });
+
         res.json({ success: true, message: "Company and all associated cascading infrastructure elements successfully purged from records archive." });
     } catch (error) {
         console.error("Destructive transaction chain collapsed:", error);
@@ -176,6 +198,7 @@ exports.updateMyCompany = async (req, res) => {
     try {
         const { companyId } = req.user; 
         const { name, contactEmail } = req.body;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         if (!companyId) {
             return res.status(403).json({ 
@@ -195,6 +218,7 @@ exports.updateMyCompany = async (req, res) => {
                 entity: 'COMPANY_SELF_PROFILE',
                 entityId: updatedCompany.id,
                 details: `Company Admin updated profile metrics. Corporate Name: "${name}", Email: "${contactEmail}".`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: req.user.id
             }
         });

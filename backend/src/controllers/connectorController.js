@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // Get all connectors (Filtered by role, includes Charge Point, Location, Company, and Tariff metadata)
 exports.getAllConnectors = async (req, res) => {
     try {
@@ -43,6 +48,7 @@ exports.createConnector = async (req, res) => {
             standard, format, powerType, voltage, amperage
         } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Verify Charge Point belongs to the operating company tenancy
         if (role !== 'SUPER_ADMIN') {
@@ -72,13 +78,14 @@ exports.createConnector = async (req, res) => {
             }
         });
 
-        // Log action trace inside platform transaction auditing logs
+        // Log action trace inside platform transaction auditing logs along with the captured IP Address
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'CONNECTOR',
                 entityId: connector.id,
                 details: `Created OCPI compliant connector (ID: ${connector.id}): Standard [${connector.standard}], Format [${connector.format}], Outputting ${maxPowerKw}kW max capacity.`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -99,6 +106,7 @@ exports.updateConnector = async (req, res) => {
             standard, format, powerType, voltage, amperage
         } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Verify absolute asset ownership matrix boundary fields
         const existingConnector = await prisma.connector.findUnique({
@@ -131,13 +139,14 @@ exports.updateConnector = async (req, res) => {
             }
         });
 
-        // Commit transaction history to system auditing metrics
+        // Commit transaction history to system auditing metrics along with the captured IP Address
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'CONNECTOR',
                 entityId: connector.id,
                 details: `Updated compliance configurations and parameters for Connector Plug ID: ${connector.id}`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -154,6 +163,7 @@ exports.deleteConnector = async (req, res) => {
     try {
         const { id } = req.params;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Verify tenancy before dropping rows from relational chains
         const connectorToDelete = await prisma.connector.findUnique({
@@ -173,13 +183,14 @@ exports.deleteConnector = async (req, res) => {
             where: { id: parseInt(id) }
         });
 
-        // Commit action to logging pool
+        // Commit action to logging pool along with the captured IP Address
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'CONNECTOR',
                 entityId: parseInt(id),
                 details: `Permanently dropped ${connectorToDelete.type} connector node (Plug ID: ${id}) from Parent Hardware CP.`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -187,7 +198,7 @@ exports.deleteConnector = async (req, res) => {
         res.json({ success: true, message: "Connector node dropped successfully." });
     } catch (error) {
         console.error(error);
-        // Prevent deletion if historical telemetry data sessions remain mapped to it in SQL Server database
+        // Prevent deletion if historical telemetry data sessions remain mapped to it
         if (error.code === 'P2003') {
             return res.status(400).json({
                 success: false,

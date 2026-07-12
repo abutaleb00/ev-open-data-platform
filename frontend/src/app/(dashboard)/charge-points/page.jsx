@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import { useAuthStore } from '@/store/authStore';
 import {
     Plus, Zap, MapPin, Edit2, Trash2, Layers,
     X, AlertCircle, CheckCircle2, Clock, Server
 } from 'lucide-react';
 
 export default function ChargePointsPage() {
+    const { user } = useAuthStore(); // Grab user context profile securely
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
     // Data State
     const [chargePoints, setChargePoints] = useState([]);
     const [locations, setLocations] = useState([]);
@@ -17,7 +21,7 @@ export default function ChargePointsPage() {
     const [modalMode, setModalMode] = useState(null);
     const [selectedCP, setSelectedCP] = useState(null);
 
-    // Form State (Updated for dynamic OCPI schema tracking)
+    // Form State
     const [formData, setFormData] = useState({
         hardwareId: '',
         locationId: '',
@@ -50,8 +54,10 @@ export default function ChargePointsPage() {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (user) {
+            fetchData();
+        }
+    }, [user]);
 
     // Modal Handlers
     const openModal = (mode, cp = null) => {
@@ -62,11 +68,18 @@ export default function ChargePointsPage() {
                 hardwareId: cp.hardwareId || '',
                 locationId: cp.locationId || '',
                 status: cp.status || 'UNKNOWN',
-                isApproved: cp.isApproved,
+                isApproved: cp.isApproved || false,
                 floorLevel: cp.floorLevel || ''
             });
         } else {
-            setFormData({ hardwareId: '', locationId: '', status: 'UNKNOWN', isApproved: false, floorLevel: '' });
+            // 🔥 FORCE FALSE ON CREATION: New deployments from company dashboards start as pending moderation
+            setFormData({
+                hardwareId: '',
+                locationId: '',
+                status: 'PLANNED',
+                isApproved: false,
+                floorLevel: ''
+            });
         }
     };
 
@@ -79,11 +92,18 @@ export default function ChargePointsPage() {
     const handleSave = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+
+        // Security Guard Layer: Strip authorization values if a non-admin attempts a profile injection exploit
+        const payload = {
+            ...formData,
+            isApproved: isSuperAdmin ? formData.isApproved : (modalMode === 'edit' ? selectedCP.isApproved : false)
+        };
+
         try {
             if (modalMode === 'create') {
-                await api.post('/charge-points', formData);
+                await api.post('/charge-points', payload);
             } else if (modalMode === 'edit') {
-                await api.put(`/charge-points/${selectedCP.id}`, formData);
+                await api.put(`/charge-points/${selectedCP.id}`, payload);
             }
             fetchData();
             closeModal();
@@ -189,7 +209,6 @@ export default function ChargePointsPage() {
                                                 {cp.location?.name || <span className="text-red-400 font-medium italic">Orphaned Station</span>}
                                             </div>
                                         </td>
-                                        {/* --- NEW COLUMN CELL: OCPI FLOOR CONTEXT --- */}
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center text-xs font-bold text-slate-500">
                                                 <Layers size={13} className="mr-1.5 text-slate-400" />
@@ -227,13 +246,12 @@ export default function ChargePointsPage() {
                 </div>
             </div>
 
-            {/* Dynamic Sliding Dialog Wrapper */}
+            {/* Dynamic Dialog Modal */}
             {modalMode && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={closeModal}></div>
 
                     <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-
                         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-150 bg-slate-50/50">
                             <h3 className="text-lg font-black text-slate-900">
                                 {modalMode === 'create' && 'Deploy New Hardware'}
@@ -248,7 +266,6 @@ export default function ChargePointsPage() {
                         {/* Form Content Elements */}
                         {(modalMode === 'create' || modalMode === 'edit') && (
                             <form onSubmit={handleSave} className="p-6 space-y-5">
-
                                 {locations.length === 0 && (
                                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-amber-800 text-sm">
                                         <AlertCircle size={18} className="shrink-0 text-amber-500 mt-0.5" />
@@ -298,7 +315,6 @@ export default function ChargePointsPage() {
                                         </select>
                                     </div>
 
-                                    {/* --- NEW FORM CONTROL INPUT: OCPI FLOOR LEVEL --- */}
                                     <div>
                                         <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Floor Level Context</label>
                                         <input
@@ -311,8 +327,9 @@ export default function ChargePointsPage() {
                                     </div>
                                 </div>
 
-                                {modalMode === 'edit' && (
-                                    <div className="pt-2">
+                                {/* 🔥 FIXED ACTION CONTROL GATED BY SECURE SYSTEM ROLE CALLS */}
+                                {modalMode === 'edit' && isSuperAdmin && (
+                                    <div className="pt-2 animate-in slide-in-from-top-2 duration-200">
                                         <label className="flex items-center space-x-3 cursor-pointer group w-fit">
                                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.isApproved ? 'bg-blue-600 border-blue-600' : 'bg-slate-50 border-slate-300'}`}>
                                                 <input

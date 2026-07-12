@@ -2,24 +2,36 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
 
-// 1. Public Endpoint: Expose ALL approved locations in exact OCPI Compliance Schema Format
+// Helper Extraction Module: Pulls real client IP down behind proxies safely
+const getClientIp = (req) => {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    return req.ip || req.socket.remoteAddress;
+};
+
 exports.getPublicFeed = async (req, res) => {
     try {
-        // Extract query filters with clean fallback assignments
-        const { search, companyId, page = 1, limit = 50 } = req.query;
+        const { search, companyId, page = 1, limit = 50, preview } = req.query;
 
         const parsedPage = Math.max(1, parseInt(page));
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit))); // Cap maximum limit at 100 rows per request
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit)));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        // Build core filter clause dynamically
-        const whereClause = { isApproved: true };
+        // Establish compliance check boundaries
+        const shouldFilterApproved = preview !== 'true';
+        
+        // Define root query filter criteria
+        const whereClause = shouldFilterApproved ? { isApproved: true } : {};
 
-        if (companyId) {
+        // 🔥 CRITICAL LIVE BUG FIX: Only filter by companyId if it is a valid numeric string.
+        // On your live environment, undefined fields passed down as raw query metrics can fall through.
+        if (companyId && !isNaN(parseInt(companyId))) {
             whereClause.companyId = parseInt(companyId);
         }
 
-        // Apply dynamic text search across Name, Postcode, and City fields
+        // Apply fallback criteria if dynamic text searches are active
         if (search && search.trim() !== '') {
             const searchString = search.trim();
             whereClause.AND = [
@@ -33,7 +45,7 @@ exports.getPublicFeed = async (req, res) => {
             ];
         }
 
-        // Run sequential queries to get records matching filter conditions alongside total counts
+        // Run direct sequential database transaction queries
         const [locations, totalCount] = await prisma.$transaction([
             prisma.location.findMany({
                 where: whereClause,
@@ -41,7 +53,6 @@ exports.getPublicFeed = async (req, res) => {
                 take: parsedLimit,
                 include: {
                     chargePoints: {
-                        where: { isApproved: true },
                         include: { connectors: true }
                     },
                     media: {
@@ -54,86 +65,92 @@ exports.getPublicFeed = async (req, res) => {
             prisma.location.count({ where: whereClause })
         ]);
 
-        // Map relational database structures into compliant OCPI JSON matrices dynamically
-        const ocpiFormattedData = locations.map(loc => ({
-            country_code: loc.countryCode,
-            party_id: loc.partyId,
-            id: `loc_${loc.id}`,
-            publish: true,
-            name: loc.name,
-            address: loc.address,
-            city: loc.city,
-            postal_code: loc.postcode,
-            state: loc.state,
-            country: loc.countryISO,
-            coordinates: {
-                latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
-                longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
-            },
-            related_locations: [],
-            parking_type: loc.parkingType,
-            evses: loc.chargePoints.map(cp => ({
-                uid: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}-1`,
-                evse_id: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}`,
-                status: cp.status,
-                status_schedule: [],
-                capabilities: [
-                    "REMOTE_START_STOP_CAPABLE",
-                    "RFID_READER",
-                    "UNLOCK_CAPABLE"
-                ],
-                connectors: cp.connectors.map(conn => ({
-                    id: conn.id.toString(),
-                    standard: conn.standard,
-                    format: conn.format,
-                    power_type: conn.powerType,
-                    max_voltage: conn.voltage,
-                    max_amperage: conn.amperage,
-                    max_electric_power: conn.maxPowerKw ? parseInt(conn.maxPowerKw) : null,
-                    tariff_ids: conn.tariffId ? [conn.tariffId.toString()] : [],
-                    terms_and_conditions: null,
-                    last_updated: cp.updatedAt || new Date().toISOString(),
-                    voltage: conn.voltage,
-                    amperage: conn.amperage
-                })),
-                floor_level: cp.floorLevel,
-                coordinates: null,
-                physical_reference: cp.hardwareId ? cp.hardwareId.slice(-6) : cp.id.toString(),
-                directions: [],
-                parking_restrictions: [],
-                images: [],
-                last_updated: cp.updatedAt || new Date().toISOString()
-            })),
-            directions: [],
-            operator: {
-                name: loc.company?.name || "Independent Operator"
-            },
-            suboperator: null,
-            owner: null,
-            facilities: loc.amenities ? loc.amenities.split(',') : [],
-            time_zone: loc.timeZone,
-            opening_times: {
-                twentyfourseven: true,
-                regular_hours: [],
-                exceptional_openings: [],
-                exceptional_closings: []
-            },
-            charging_when_closed: null,
-            images: loc.media ? loc.media.map(m => ({
-                url: m.url,
-                type: m.type,
-                category: "ENTRANCE"
-            })) : [],
-            energy_mix: null,
-            last_updated: loc.updatedAt || new Date().toISOString(),
-            publish_allowed_to: [],
-            location_point: {
-                type: "Point",
-                coordinates: [parseFloat(loc.longitude || 0), parseFloat(loc.latitude || 0)]
-            }
-        }));
+        // Map database arrays into compliant OCPI structural objects
+        const ocpiFormattedData = locations.map(loc => {
+            const relevantChargePoints = (loc.chargePoints || []).filter(cp => {
+                if (!shouldFilterApproved) return true;
+                return cp.isApproved === true;
+            });
 
-        // Respond with structured data and standard pagination headers
+            return {
+                country_code: loc.countryCode,
+                party_id: loc.partyId,
+                id: `loc_${loc.id}`,
+                publish: true,
+                name: loc.name,
+                address: loc.address,
+                city: loc.city,
+                postal_code: loc.postcode,
+                state: loc.state || null,
+                country: loc.countryISO,
+                coordinates: {
+                    latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
+                    longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
+                },
+                related_locations: [],
+                parking_type: loc.parkingType,
+                evses: relevantChargePoints.map(cp => ({
+                    uid: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}-1`,
+                    evse_id: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}`,
+                    status: cp.status,
+                    status_schedule: [],
+                    capabilities: [
+                        "REMOTE_START_STOP_CAPABLE",
+                        "RFID_READER",
+                        "UNLOCK_CAPABLE"
+                    ],
+                    connectors: (cp.connectors || []).map(conn => ({
+                        id: conn.id.toString(),
+                        standard: conn.standard,
+                        format: conn.format,
+                        power_type: conn.powerType,
+                        max_voltage: conn.voltage,
+                        max_amperage: conn.amperage,
+                        max_electric_power: conn.maxPowerKw ? Math.round(conn.maxPowerKw) : null,
+                        tariff_ids: conn.tariffId ? [conn.tariffId.toString()] : [],
+                        terms_and_conditions: null,
+                        last_updated: cp.updatedAt || new Date().toISOString(),
+                        voltage: conn.voltage,
+                        amperage: conn.amperage
+                    })),
+                    floor_level: cp.floorLevel || null,
+                    coordinates: null,
+                    physical_reference: cp.hardwareId ? cp.hardwareId.slice(-6) : cp.id.toString(),
+                    directions: [],
+                    parking_restrictions: [],
+                    images: [],
+                    last_updated: cp.updatedAt || new Date().toISOString()
+                })),
+                directions: [],
+                operator: {
+                    name: loc.company?.name || "Independent Operator"
+                },
+                suboperator: null,
+                owner: null,
+                facilities: loc.amenities ? loc.amenities.split(',').map(f => f.trim()) : [],
+                time_zone: loc.timeZone,
+                opening_times: {
+                    twentyfourseven: true,
+                    regular_hours: [],
+                    exceptional_openings: [],
+                    exceptional_closings: []
+                },
+                charging_when_closed: null,
+                images: (loc.media || []).map(m => ({
+                    url: m.url,
+                    type: m.type,
+                    category: "ENTRANCE"
+                })),
+                energy_mix: null,
+                last_updated: loc.updatedAt || new Date().toISOString(),
+                publish_allowed_to: [],
+                location_point: {
+                    type: "Point",
+                    coordinates: [parseFloat(loc.longitude || 0), parseFloat(loc.latitude || 0)]
+                }
+            };
+        });
+
         res.json({
             name: "OK",
             message: "ok",
@@ -147,7 +164,7 @@ exports.getPublicFeed = async (req, res) => {
             data: ocpiFormattedData
         });
     } catch (error) {
-        console.error(error);
+        console.error("OCPI data compilation fault:", error);
         res.status(500).json({ name: "ERROR", message: "Failed to compile compliance open data stream." });
     }
 };
@@ -184,6 +201,7 @@ exports.generateApiKey = async (req, res) => {
     try {
         const { name, companyId: requestedCompanyId } = req.body;
         const { companyId, id: userId, role } = req.user;
+        const clientIp = getClientIp(req); 
 
         let targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(requestedCompanyId) : parseInt(companyId);
 
@@ -212,6 +230,7 @@ exports.generateApiKey = async (req, res) => {
                 entity: 'API_KEY',
                 entityId: apiKeyRecord.id,
                 details: `Generated new API Access Token: "${name}"`,
+                ipAddress: clientIp, 
                 userId: userId
             }
         });
@@ -223,38 +242,33 @@ exports.generateApiKey = async (req, res) => {
     }
 };
 
-// Expose approved tariffs with Filtering, Pagination, and Search matching OCPI compliance patterns
+// 4. Public Endpoint: Expose approved tariffs with Filtering, Pagination, and Search
 exports.getPublicTariffs = async (req, res) => {
     try {
-        // Extract query filters with clean fallback assignments
         const { search, companyId, page = 1, limit = 50 } = req.query;
 
         const parsedPage = Math.max(1, parseInt(page));
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit))); // Cap maximum limit at 100 rows per request
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit))); 
         const offset = (parsedPage - 1) * parsedLimit;
 
-        // Build core filter clause dynamically
         const whereClause = {};
 
         if (companyId) {
             whereClause.companyId = parseInt(companyId);
         }
 
-        // Apply dynamic text search across currency or pricing structures if alphanumeric data strings match
         if (search && search.trim() !== '') {
             const searchString = search.trim();
             whereClause.AND = [
                 {
                     OR: [
                         { currency: { contains: searchString } },
-                        // Handling fuzzy text matching for pricing numbers if your SQL flavor supports implicit casts
                         { pricePerKwh: { contains: searchString } }
                     ]
                 }
             ];
         }
 
-        // Run sequential queries to get records matching filter conditions alongside total counts
         const [tariffs, totalCount] = await prisma.$transaction([
             prisma.tariff.findMany({
                 where: whereClause,
@@ -265,7 +279,6 @@ exports.getPublicTariffs = async (req, res) => {
             prisma.tariff.count({ where: whereClause })
         ]);
 
-        // Map dynamic database values into compliant OCPI nested array payload matrices
         const ocpiTariffs = tariffs.map(t => ({
             id: t.id.toString(),
             currency: t.currency || "GBP",
@@ -284,7 +297,6 @@ exports.getPublicTariffs = async (req, res) => {
             last_updated: t.createdAt || new Date().toISOString()
         }));
 
-        // Respond with structured data and standard pagination headers mirroring the locations feed endpoint
         res.json({
             name: "OK",
             message: "ok",
@@ -307,13 +319,12 @@ exports.getPublicTariffs = async (req, res) => {
 exports.getDashboardFeedPreview = async (req, res) => {
     try {
         const { role, companyId } = req.user;
-        const { search, page = 1, limit = 10 } = req.query; // Default to smaller preview sizes
+        const { search, page = 1, limit = 10 } = req.query; 
 
         const parsedPage = Math.max(1, parseInt(page));
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit)));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        // Strict tenancy enforcement boundary loop
         const whereClause = role === 'SUPER_ADMIN' ? {} : { companyId: parseInt(companyId) };
 
         if (search && search.trim() !== '') {
@@ -344,7 +355,6 @@ exports.getDashboardFeedPreview = async (req, res) => {
             prisma.location.count({ where: whereClause })
         ]);
 
-        // Map data using exact same OCPI formatting block so the preview perfectly mirrors production data
         const ocpiFormattedData = locations.map(loc => ({
             country_code: loc.countryCode,
             party_id: loc.partyId,
@@ -358,11 +368,11 @@ exports.getDashboardFeedPreview = async (req, res) => {
                 latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
                 longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
             },
-            evses: loc.chargePoints.map(cp => ({
+            evses: (loc.chargePoints || []).map(cp => ({
                 uid: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}-1`,
                 evse_id: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}`,
                 status: cp.status,
-                connectors: cp.connectors.map(conn => ({
+                connectors: (cp.connectors || []).map(conn => ({
                     id: conn.id.toString(),
                     standard: conn.standard,
                     format: conn.format,

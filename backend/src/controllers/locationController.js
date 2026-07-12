@@ -3,6 +3,11 @@ const prisma = new PrismaClient();
 const fs = require('fs');
 const path = require('path');
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // Helper function to extract a file name from a public URL and purge it from the server's hard drive
 const purgePhysicalFile = (url) => {
     try {
@@ -87,6 +92,7 @@ exports.createLocation = async (req, res) => {
             city, state, countryCode, partyId, countryISO, parkingType, timeZone
         } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Force Company Admins to only create locations for their own company context
         const targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(companyId) : parseInt(userCompanyId);
@@ -95,7 +101,7 @@ exports.createLocation = async (req, res) => {
             return res.status(400).json({ success: false, message: "A valid company context id must be resolved to create a location entry." });
         }
 
-        // --- ENHANCEMENT: GEOSPATIAL VECTOR GUARDRAILS ---
+        // --- GEOSPATIAL VECTOR GUARDRAILS ---
         const lat = parseFloat(latitude);
         const lng = parseFloat(longitude);
         if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
@@ -130,8 +136,10 @@ exports.createLocation = async (req, res) => {
 
             // Map and store local file reference pointers if present in multi-part payload request
             if (req.files && req.files.length > 0) {
+                // FIXED: Normalizes host parsing dynamically using environment routing buffers
+                const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
                 const mediaData = req.files.map(file => ({
-                    url: `${req.protocol}://${req.get('host')}/uploads/locations/${file.filename}`,
+                    url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
                     type: file.mimetype,
                     locationId: location.id
                 }));
@@ -142,13 +150,14 @@ exports.createLocation = async (req, res) => {
             return location;
         });
 
-        // Log this structural action inside our audit engine ledger
+        // Log this structural action inside our audit engine ledger along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'LOCATION',
                 entityId: result.id,
                 details: `Created new OCPI compliant location: "${name}" with attached images.`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -169,8 +178,9 @@ exports.updateLocation = async (req, res) => {
             city, state, countryCode, partyId, countryISO, parkingType, timeZone
         } = req.body;
         const userId = req.user.id;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
-        // --- NEW: SANITIZE MULTIPART TEXT STRINGS TO NATIVE TYPES ---
+        // --- SANITIZE MULTIPART TEXT STRINGS TO NATIVE TYPES ---
         let parsedIsApproved = undefined;
         if (isApproved !== undefined) {
             parsedIsApproved = isApproved === 'true' || isApproved === true;
@@ -191,7 +201,7 @@ exports.updateLocation = async (req, res) => {
             ...(timeZone && { timeZone })
         };
 
-        // --- ENHANCEMENT: GEOSPATIAL VECTOR GUARDRAILS ---
+        // --- GEOSPATIAL VECTOR GUARDRAILS ---
         if (latitude !== undefined || longitude !== undefined) {
             if (latitude) updateData.latitude = parseFloat(latitude);
             if (longitude) updateData.longitude = parseFloat(longitude);
@@ -215,8 +225,10 @@ exports.updateLocation = async (req, res) => {
 
         // Process file attachments appended during modifications
         if (req.files && req.files.length > 0) {
+            // FIXED: Normalizes host parsing dynamically using environment routing buffers
+            const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
             const mediaData = req.files.map(file => ({
-                url: `${req.protocol}://${req.get('host')}/uploads/locations/${file.filename}`,
+                url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
                 type: file.mimetype,
                 locationId: location.id
             }));
@@ -224,13 +236,14 @@ exports.updateLocation = async (req, res) => {
             await prisma.media.createMany({ data: mediaData });
         }
 
-        // Trace change log inside Audit Ledger records
+        // Trace change log inside Audit Ledger records along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'LOCATION',
                 entityId: location.id,
                 details: `Updated location properties and compliance parameters for: "${location.name}"`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -248,6 +261,7 @@ exports.deleteLocation = async (req, res) => {
         const { id } = req.params;
         const userId = req.user.id;
         const parsedId = parseInt(id);
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Fetch location details first to verify existence and extract dependent media
         const locationToDelete = await prisma.location.findUnique({
@@ -271,26 +285,26 @@ exports.deleteLocation = async (req, res) => {
             });
         }
 
-        // --- ENHANCEMENT: DISK-CLEANSING CASCADE ---
-        // Purge physical filesystem uploads linked to this container before running table deletion
+        // --- DISK-CLEANSING CASCADE ---
         if (locationToDelete.media && locationToDelete.media.length > 0) {
             locationToDelete.media.forEach(mediaItem => {
                 purgePhysicalFile(mediaItem.url);
             });
         }
 
-        // Drop the location. Prisma cascade schemas will remove relational rows inside the Media table automatically.
+        // Drop the location.
         await prisma.location.delete({
             where: { id: parsedId }
         });
 
-        // Log destruction event
+        // Log destruction event along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'LOCATION',
                 entityId: parsedId,
                 details: `Permanently removed location node registry item: "${locationToDelete.name}" and purged all associated server disk assets.`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -312,7 +326,6 @@ exports.deleteLocation = async (req, res) => {
 exports.deleteLocationImage = async (req, res) => {
     try {
         const { mediaId } = req.params;
-        const userId = req.user.id;
         const parsedMediaId = parseInt(mediaId);
 
         // Fetch the file entry to get its URL string path

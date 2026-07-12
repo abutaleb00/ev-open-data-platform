@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // Get all charge points (Filtered by role, includes parent locations and company structures)
 exports.getAllChargePoints = async (req, res) => {
     try {
@@ -32,6 +37,7 @@ exports.createChargePoint = async (req, res) => {
     try {
         const { hardwareId, locationId, status, floorLevel } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Ensure the target parent location belongs to the user's company tenancy
         if (role !== 'SUPER_ADMIN') {
@@ -52,13 +58,14 @@ exports.createChargePoint = async (req, res) => {
             }
         });
 
-        // Log transaction inside global audit stream
+        // Log transaction inside global audit stream with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'CHARGE_POINT',
                 entityId: chargePoint.id,
                 details: `Created new OCPI compliant EVSE hardware node: "${hardwareId}" at floor context [${floorLevel || 'Ground'}]`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -76,6 +83,7 @@ exports.updateChargePoint = async (req, res) => {
         const { id } = req.params;
         const { hardwareId, locationId, status, isApproved, floorLevel } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Verify absolute asset ownership matrix boundary fields
         const existingCP = await prisma.chargePoint.findUnique({
@@ -104,13 +112,14 @@ exports.updateChargePoint = async (req, res) => {
             }
         });
 
-        // Commit profile action state to security logging
+        // Commit profile action state to security logging with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'CHARGE_POINT',
                 entityId: chargePoint.id,
                 details: `Updated charge point configuration data matrices for: "${chargePoint.hardwareId}"`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -127,6 +136,7 @@ exports.deleteChargePoint = async (req, res) => {
     try {
         const { id } = req.params;
         const { id: userId, role, companyId: userCompanyId } = req.user;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Security Check: Verify absolute tenancy boundaries before wiping tracking nodes
         const cpToDelete = await prisma.chargePoint.findUnique({
@@ -144,13 +154,14 @@ exports.deleteChargePoint = async (req, res) => {
 
         await prisma.chargePoint.delete({ where: { id: parseInt(id) } });
 
-        // Log final asset deletion drop sequence status
+        // Log final asset deletion drop sequence status with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'CHARGE_POINT',
                 entityId: parseInt(id),
                 details: `Permanently unmapped and dropped charge point node: "${cpToDelete.hardwareId}"`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });

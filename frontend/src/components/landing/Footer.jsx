@@ -43,13 +43,13 @@ export default function Footer() {
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
                                 <li>
-                                    <a href="https://evopen-api.maanrishfaxyz.xyz/api/v1/open-data/feed" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
+                                    <a href="https://evopen-api.prosfata.space/api/v1/open-data/feed" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#FFAF00] transition-colors" />
                                         Locations JSON Feed
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="https://evopen-api.maanrishfaxyz.xyz/api/v1/open-data/tariffs" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
+                                    <a href="https://evopen-api.prosfata.space/api/v1/open-data/tariffs" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#73CB44] transition-colors" />
                                         Tariffs JSON Feed
                                     </a>

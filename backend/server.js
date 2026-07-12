@@ -12,6 +12,11 @@ dotenv.config();
 
 const app = express();
 
+// 0. TRUST REVERSE PROXY HEADERS
+// Tells Express to trust proxy structural headers (X-Forwarded-For) forwarded by Nginx.
+// "1" indicates trust for the first hop proxy immediately preceding the application container.
+app.set('trust proxy', 1);
+
 // 1. ADVANCED SECURITY HEADERS GATE
 // Sets modern HTTP headers to shield against common web vulnerabilities
 app.use(helmet({
@@ -19,6 +24,7 @@ app.use(helmet({
 }));
 
 // 2. RESOURCE SCRAPING & DOS FLOOD PROTECTOR RATE LIMITER
+// With 'trust proxy' turned active, this will rate limit by actual browser IPs instead of the loopback gateway
 const globalRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 Minute window block
     max: 300, // Limits each individual client IP to 300 hits per window block
@@ -37,7 +43,7 @@ app.use('/api/', globalRateLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 4. FIXED: PRODUCTION EXPRESS CROSS-ORIGIN RESOURCE SHARING POLICY
+// 4. PRODUCTION EXPRESS CROSS-ORIGIN RESOURCE SHARING POLICY
 const allowedOrigins = [
     'https://evopen.maanrishfaxyz.xyz', // Your primary production frontend link
     'http://localhost:3000',             // Local development server fallback path

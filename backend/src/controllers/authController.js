@@ -78,6 +78,26 @@ const sendVerificationEmail = async (targetEmail, firstName, companyName, activa
     });
 };
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    // 1. Check for standard forwarded headers (useful behind multi-tier proxies)
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        // Splitting avoids picking up internal proxy hops; returns the real user origin IP
+        const ips = forwardedFor.split(',').map(ip => ip.trim());
+        if (ips[0] && ips[0] !== '::1' && ips[0] !== '127.0.0.1') {
+            return ips[0];
+        }
+    }
+
+    // 2. Check alternative proxy origin tracking header keys
+    if (req.headers['x-real-ip']) return req.headers['x-real-ip'].trim();
+    if (req.headers['cf-connecting-ip']) return req.headers['cf-connecting-ip'].trim();
+
+    // 3. Fallback to basic connection socket options
+    return req.ip || req.socket.remoteAddress || '0.0.0.0';
+};
+
 // 1. SELF-REGISTRATION ROOT: Onboard user into an unverified state
 exports.registerCompanyAndAdmin = async (req, res) => {
     try {
@@ -88,6 +108,8 @@ exports.registerCompanyAndAdmin = async (req, res) => {
         if (!companyName || !userEmail || !password) {
             return res.status(400).json({ success: false, message: "Missing required registration parameters." });
         }
+
+        const clientIp = getClientIp(req); // <-- Captures Request Location Path IP Vector
 
         const existingUser = await prisma.user.findUnique({ where: { email: userEmail } });
         if (existingUser) {
@@ -123,21 +145,21 @@ exports.registerCompanyAndAdmin = async (req, res) => {
             return { company, user };
         });
 
-        // Base path falls back to the environment variable, or your production domain automatically
         const frontendBaseUrl = process.env.FRONTEND_URL || 'https://evopen.maanrishfaxyz.xyz';
-
         const activationLink = `${frontendBaseUrl}/verify-email?token=${activationToken}`;
 
         sendVerificationEmail(userEmail, firstName, companyName, activationLink).catch(err => {
             console.error("Critical SMTP Pipeline Delivery Intercept Crash:", err);
         });
 
+        // Appends user IP address directly into data structure details block cleanly
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'USER',
                 entityId: result.user.id,
-                details: `Self-registration initialized for <${userEmail}>. Staged company tenancy: "${companyName}". Activation email dispatched.`,
+                details: `Self-registration initialized for <${userEmail}> from IP [${clientIp}]. Staged company tenancy: "${companyName}". Activation email dispatched.`,
+                ipAddress: clientIp,
                 userId: result.user.id
             }
         });
@@ -157,10 +179,11 @@ exports.registerCompanyAndAdmin = async (req, res) => {
 exports.verifyEmailToken = async (req, res) => {
     try {
         const { token } = req.query;
-
         if (!token) {
             return res.status(400).json({ success: false, message: "Invalid or expired activation reference token." });
         }
+
+        const clientIp = getClientIp(req); // <-- Captures Verification Source IP Vector
 
         const user = await prisma.user.findUnique({ where: { activationToken: token } });
         if (!user) {
@@ -171,7 +194,6 @@ exports.verifyEmailToken = async (req, res) => {
             where: { id: user.id },
             data: {
                 isActivated: true,
-                // Appends a unique hash to archive the token safely while satisfying SQL Server constraints
                 activationToken: `ARCHIVED_${user.id}_${crypto.randomBytes(4).toString('hex')}`
             }
         });
@@ -181,7 +203,8 @@ exports.verifyEmailToken = async (req, res) => {
                 action: 'UPDATE',
                 entity: 'USER',
                 entityId: updatedUser.id,
-                details: `Email token validated. Account activated successfully via self-service verification link for <${updatedUser.email}>.`,
+                details: `Email token validated from IP [${clientIp}]. Account activated successfully via self-service verification link for <${updatedUser.email}>.`,
+                ipAddress: clientIp,
                 userId: updatedUser.id
             }
         });
@@ -193,10 +216,12 @@ exports.verifyEmailToken = async (req, res) => {
     }
 };
 
-// 3. LOGIN CHECK: Authenticate credentials and return user profile details with tenancy scope
+// 3. LOGIN CHECK: Authenticate credentials and return user profile details
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
+        const clientIp = getClientIp(req); // <-- Captures Authentication Session IP Vector
+
         const user = await prisma.user.findUnique({ where: { email } });
 
         if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -217,12 +242,12 @@ exports.login = async (req, res) => {
                 action: 'LOGIN',
                 entity: 'USER',
                 entityId: user.id,
-                details: `User <${user.email}> successfully authenticated and obtained active session JWT.`,
+                details: `User <${user.email}> successfully authenticated from IP [${clientIp}] and obtained active session JWT.`,
+                ipAddress: clientIp,
                 userId: user.id
             }
         });
 
-        // FIXED payload mapping block: Returns companyId to let frontend hook isolated telemetry streams cleanly
         res.json({
             success: true,
             token,
@@ -231,7 +256,7 @@ exports.login = async (req, res) => {
                 email: user.email,
                 role: user.role,
                 name: user.name,
-                companyId: user.companyId // <-- Added this critical structural key variable
+                companyId: user.companyId
             }
         });
     } catch (error) {

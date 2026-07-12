@@ -12,11 +12,11 @@ generator client {
 // ------------------------------------------------------
 
 model Company {
-  id           Int        @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   name         String
   contactEmail String
-  status       String     @default("PENDING") // PENDING, ACTIVE, SUSPENDED
-  createdAt    DateTime   @default(now())
+  status       String   @default("PENDING") // PENDING, ACTIVE, SUSPENDED
+  createdAt    DateTime @default(now())
   
   // Relations
   users        User[]
@@ -179,6 +179,7 @@ model AuditLog {
   entity    String   
   entityId  Int      
   details   String   
+  ipAddress String?  // <-- Added this string attribute variable to store request vectors natively
   timestamp DateTime @default(now())
 
   // Relations

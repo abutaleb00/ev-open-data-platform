@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // Get all submissions requiring review (both locations and charge points)
 exports.getPendingSubmissions = async (req, res) => {
     try {
@@ -39,6 +44,7 @@ exports.moderateLocation = async (req, res) => {
     const { id } = req.params;
     const { approved, note } = req.body;
     const userId = req.user.id;
+    const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
     try {
         const updatedLocation = await prisma.location.update({
@@ -50,13 +56,14 @@ exports.moderateLocation = async (req, res) => {
             include: { company: true }
         });
 
-        // Write an immutable log trace inside the Audit ledger system
+        // Write an immutable log trace inside the Audit ledger system with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'LOCATION',
                 entityId: updatedLocation.id,
                 details: `Super Admin completed moderation review for location #${id}. Result: ${approved ? 'APPROVED' : 'REJECTED'}`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -72,12 +79,12 @@ exports.moderateLocation = async (req, res) => {
     }
 };
 
-// --- FIX: ADDED MISSING CHARGE POINT MODERATION CONTROLLER ---
 // Update Charge Point Approval Status
 exports.moderateChargePoint = async (req, res) => {
     const { id } = req.params;
     const { approved, note } = req.body;
     const userId = req.user.id;
+    const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
     try {
         const updatedChargePoint = await prisma.chargePoint.update({
@@ -88,13 +95,14 @@ exports.moderateChargePoint = async (req, res) => {
             }
         });
 
-        // Write an immutable log trace inside the Audit ledger system
+        // Write an immutable log trace inside the Audit ledger system with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'CHARGE_POINT',
                 entityId: updatedChargePoint.id,
                 details: `Super Admin completed moderation review for charge point #${id}. Result: ${approved ? 'APPROVED' : 'REJECTED'}`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -119,7 +127,6 @@ exports.getMainMaintenanceSettings = async (req, res) => {
         });
 
         // Fallback: If no system config row exists yet, return a mock safe state 
-        // to prevent the frontend UI from crashing on first boot
         if (!config) {
             config = {
                 id: 1,
@@ -139,12 +146,12 @@ exports.getMainMaintenanceSettings = async (req, res) => {
     }
 };
 
-// Update or create (upsert) the global maintenance and gate overrides
-// Update or create (upsert fallback) the global maintenance and gate overrides safely for SQL Server
+// Update or create (upsert fallback) the global maintenance and gate overrides safely
 exports.updateMaintenanceSettings = async (req, res) => {
     try {
         const { globalAlert, alertMessage, affectedServices } = req.body;
         const userId = req.user.id;
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         // Clean up data objects safely
         const dataPayload = {
@@ -166,20 +173,20 @@ exports.updateMaintenanceSettings = async (req, res) => {
                 data: dataPayload
             });
         } else {
-            // 3. If it doesn't exist, create it WITHOUT passing an explicit 'id' attribute,
-            // letting SQL Server use its native AUTOINCREMENT identity tracking safely.
+            // 3. If it doesn't exist, create it let MySQL handle identity tracking safely
             config = await prisma.systemConfig.create({
                 data: dataPayload
             });
         }
 
-        // Write an immutable log trace inside the Audit ledger system
+        // Write an immutable log trace inside the Audit ledger system with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'SYSTEM_CONFIG',
                 entityId: config.id,
                 details: `Super Admin modified platform operational gates. Global Intercept: ${config.globalAlert}`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: userId
             }
         });
@@ -196,6 +203,7 @@ exports.toggleUserActivation = async (req, res) => {
     try {
         const { userId } = req.params;
         const { activate } = req.body; // boolean true/false
+        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
 
         const user = await prisma.user.findUnique({ where: { id: parseInt(userId) } });
         if (!user) return res.status(404).json({ success: false, message: "User profile target not located." });
@@ -209,13 +217,14 @@ exports.toggleUserActivation = async (req, res) => {
             }
         });
 
-        // Log this administrative mutation into audit log files
+        // Log this administrative mutation into audit log files with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'USER',
                 entityId: user.id,
                 details: `Super Admin modified account clearance. User status for <${user.email}> set to: ${activate ? 'ACTIVE' : 'SUSPENDED'}`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: req.user.id
             }
         });

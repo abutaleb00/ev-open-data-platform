@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
+};
+
 // 1. Update Company Status (Activate / Suspend)
 exports.updateCompanyStatus = async (req, res) => {
     try {
@@ -8,6 +13,7 @@ exports.updateCompanyStatus = async (req, res) => {
         const { status } = req.body; // "ACTIVE", "SUSPENDED"
         const adminId = req.user.id;
         const companyIdInt = parseInt(id);
+        const clientIp = getClientIp(req); // <-- Captures Admin request origin IP vector
 
         if (!['ACTIVE', 'SUSPENDED'].includes(status)) {
             return res.status(400).json({ success: false, message: "Invalid status state value." });
@@ -23,7 +29,7 @@ exports.updateCompanyStatus = async (req, res) => {
 
             let detailsMessage = `Super Admin changed company "${company.name}" status to ${status}.`;
 
-            // CASCADING ACTIVATION OVRERIDE: If company is set to ACTIVE, automatically activate its admin nodes
+            // CASCADING ACTIVATION OVERRIDE: If company is set to ACTIVE, automatically activate its admin nodes
             if (status === 'ACTIVE') {
                 const updateUsers = await tx.user.updateMany({
                     where: {
@@ -53,13 +59,14 @@ exports.updateCompanyStatus = async (req, res) => {
             return { company, detailsMessage };
         });
 
-        // Log this administrative action to the audit ledger
+        // Log this administrative action to the audit ledger along with the captured IP Address
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'COMPANY_STATUS',
                 entityId: result.company.id,
                 details: result.detailsMessage,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: adminId
             }
         });
@@ -81,6 +88,7 @@ exports.updateUserStatus = async (req, res) => {
         const { id } = req.params;
         const { status } = req.body; // "ACTIVE", "SUSPENDED", "DISABLED"
         const adminId = req.user.id;
+        const clientIp = getClientIp(req); // <-- Captures Admin request origin IP vector
 
         if (!['ACTIVE', 'SUSPENDED', 'DISABLED'].includes(status)) {
             return res.status(400).json({ success: false, message: "Invalid user status configuration state." });
@@ -95,12 +103,14 @@ exports.updateUserStatus = async (req, res) => {
             select: { id: true, email: true, name: true, status: true, role: true, isActivated: true }
         });
 
+        // Log this administrative update to the audit ledger along with the captured IP Address
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'USER_STATUS',
                 entityId: updatedUser.id,
                 details: `Administrative status alteration on user "${updatedUser.email}" configured to ${status}. (Activation Status: ${updatedUser.isActivated})`,
+                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
                 userId: adminId
             }
         });

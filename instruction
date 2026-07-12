@@ -1,0 +1,13 @@
+cd /var/www/evopen-api
+
+# 1. Clear Prisma's local client cache
+npx prisma generate
+
+# 2. Force a structured migration sequence instead of db push
+# This tells Prisma to safely drop the relationship constraints *before* altering indexes
+npx prisma migrate dev --name add_ip_address_tracking
+
+
+mysql -u root -p
+use EVChargePointDB
+SHOW DATABASES;

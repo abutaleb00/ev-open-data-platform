@@ -100,3 +100,50 @@ exports.restrictTo = (...roles) => {
         next();
     };
 };
+
+/**
+ * VERIFY PARTNER API KEY: Validates the incoming token sent by the client team
+ * inside the 'x-api-key' header for the data ingestion endpoint.
+ */
+exports.verifyPartnerApiKey = async (req, res, next) => {
+    try {
+        const apiKey = req.headers['x-api-key'];
+
+        if (!apiKey) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized: Missing API Key inside 'x-api-key' header."
+            });
+        }
+
+        // Search database for the provided key and verify its tenant status
+        const keyRecord = await prisma.apiKey.findUnique({
+            where: { key: apiKey },
+            include: { company: true }
+        });
+
+        if (!keyRecord || !keyRecord.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: Invalid or deactivated API Key."
+            });
+        }
+
+        // Confirm parent company is active
+        if (keyRecord.company.status !== 'ACTIVE') {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: The parent company tied to this API key is not active."
+            });
+        }
+
+        // Attach company context to the request for the ingestion controller
+        req.partnerCompanyId = keyRecord.companyId;
+        next();
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Internal security engine error during validation."
+        });
+    }
+};

@@ -347,13 +347,25 @@ export default function LocationsPage() {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end space-x-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openModal('edit', loc)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit Location">
-                                                    <Edit2 size={14} strokeWidth={2.5} />
-                                                </button>
-                                                <button onClick={() => openModal('delete', loc)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Delete Location">
-                                                    <Trash2 size={14} strokeWidth={2.5} />
-                                                </button>
+                                            <div className="flex items-center justify-end space-x-2">
+                                                {/* New Dedicated Enrichment Entry Button */}
+                                                <a
+                                                    href={`/locations/enrich?id=${loc.id}`}
+                                                    className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-all cursor-pointer"
+                                                    title="Configure Open Data Enrichment Attributes"
+                                                >
+                                                    <Globe size={12} strokeWidth={2.5} />
+                                                    <span>Enrich Data</span>
+                                                </a>
+
+                                                <div className="flex items-center space-x-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => openModal('edit', loc)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit Core Location">
+                                                        <Edit2 size={14} strokeWidth={2.5} />
+                                                    </button>
+                                                    <button onClick={() => openModal('delete', loc)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Delete Location">
+                                                        <Trash2 size={14} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>

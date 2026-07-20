@@ -1,6 +1,7 @@
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 generator client {
@@ -17,33 +18,35 @@ model Company {
   contactEmail String
   status       String   @default("PENDING") // PENDING, ACTIVE, SUSPENDED
   createdAt    DateTime @default(now())
-  
+
   // Relations
-  users        User[]
-  locations    Location[]
-  tariffs      Tariff[]
-  apiKeys      ApiKey[]
+  users     User[]
+  locations Location[]
+  tariffs   Tariff[]
+  apiKeys   ApiKey[]
 }
 
 model User {
-  id              Int        @id @default(autoincrement())
-  email           String     @unique
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
   password        String
-  name            String?    
+  name            String?
   phoneNumber     String?
-  avatarUrl       String?    @db.Text // Swapped from VarChar(Max) to Text for MySQL
-  locationStr     String?    // Operational branch/location address reference
-  
-  role            String     @default("COMPANY_ADMIN") 
-  isActivated     Boolean    @default(false)
-  activationToken String?    @unique
-  status          String     @default("ACTIVE")    // ACTIVE, SUSPENDED, DISABLED
-  createdAt       DateTime   @default(now())
-  
+  avatarUrl       String?  @db.Text
+  locationStr     String?
+
+  role            String   @default("COMPANY_ADMIN")
+  isActivated     Boolean  @default(false)
+  activationToken String?  @unique
+  status          String   @default("ACTIVE") // ACTIVE, SUSPENDED, DISABLED
+  createdAt       DateTime @default(now())
+
   // Relations
-  companyId       Int?
-  company         Company?   @relation(fields: [companyId], references: [id])
-  auditLogs       AuditLog[]
+  companyId Int?
+  company   Company?   @relation(fields: [companyId], references: [id])
+  auditLogs AuditLog[]
+
+  @@index([companyId], map: "User_companyId_fkey")
 }
 
 // ------------------------------------------------------
@@ -51,80 +54,110 @@ model User {
 // ------------------------------------------------------
 
 model Location {
-  id            Int           @id @default(autoincrement())
-  name          String        // e.g., "Spencer 000024"
-  address       String
-  postcode      String
-  latitude      Float
-  longitude     Float
-  amenities     String?       // e.g., "Cafe, Restroom, WiFi"
-  
-  // --- NEW EXPLICIT OCPI DATA ATTRIBUTES ---
-  countryCode   String        @default("GB")
-  partyId       String        @default("CEV")
-  city          String        @default("Unknown City")
-  state         String?       
-  countryISO    String        @default("GBR")
-  parkingType   String        @default("UNKNOWN")
-  timeZone      String        @default("Europe/London")
+  id        Int     @id @default(autoincrement())
+  name      String  // e.g., "Spencer 000024"
+  address   String
+  postcode  String
+  latitude  Float
+  longitude Float
+  amenities String? // Maps to "facilities" string list in feed
+
+  // --- OCPI DATA ATTRIBUTES ---
+  countryCode String  @default("GB")
+  partyId     String  @default("CEV")
+  city        String  @default("Unknown City")
+  state       String?
+  countryISO  String  @default("GBR")
+
+  // Editable via Portal
+  parkingType        String? @default("UNKNOWN")
+  timeZone           String? @default("Europe/London")
+  directions         String? @db.Text // Guidance instructions
+  relatedLocations   String? @db.Text // JSON string map
+  suboperatorName    String?
+  suboperatorWebsite String?
+  suboperatorLogoUrl String?
+  chargingWhenClosed Boolean @default(false)
+  publishAllowedTo   String? @db.Text // Managed via panel tokens array list
+  energyMix          String? @db.Text // JSON string containing grid supply details
 
   // Moderation Engine
-  isApproved    Boolean       @default(false)
+  publish       Boolean @default(true) // Maps directly to OCPI 'publish' status
+  isApproved    Boolean @default(false)
   rejectionNote String?
-  
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  companyId     Int
-  company       Company       @relation(fields: [companyId], references: [id])
-  chargePoints  ChargePoint[]
-  media         Media[]       
+  companyId    Int
+  company      Company       @relation(fields: [companyId], references: [id])
+  chargePoints ChargePoint[]
+  media        Media[]
+
+  @@index([companyId], map: "Location_companyId_fkey")
+  @@index([isApproved], map: "Location_isApproved_idx")
 }
 
 model ChargePoint {
-  id            Int         @id @default(autoincrement())
-  hardwareId    String      @unique // Acts as the root unique device cross-reference key
-  status        String      @default("UNKNOWN") // AVAILABLE, OCCUPIED, FAULTED, UNKNOWN
-  
-  // --- NEW OCPI EVSE ATTRIBUTES ---
-  floorLevel    String?
-  
+  id         Int    @id @default(autoincrement())
+  hardwareId String @unique // evse_id link pointer
+  status     String @default("UNKNOWN") // AVAILABLE, OCCUPIED, FAULTED, UNKNOWN
+
+  // --- OCPI EVSE ATTRIBUTES ---
+  floorLevel          String?
+  statusSchedule      String? @db.Text
+  parkingRestrictions String? @db.Text
+  directions          String? @db.Text
+  capabilities        String  @default("REMOTE_START_STOP_CAPABLE")
+
+  // Custom EVSE Coordinates and Media JSON Overrides
+  evseLatitude  Float?
+  evseLongitude Float?
+  evseImages    String? @db.Text // JSON array string of photo URLs
+
   // Moderation Engine
-  isApproved    Boolean     @default(false)
+  isApproved    Boolean @default(false)
   rejectionNote String?
-  
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  locationId    Int
-  location      Location    @relation(fields: [locationId], references: [id])
-  connectors    Connector[] 
-  media         Media[]     
+  locationId Int
+  location   Location    @relation(fields: [locationId], references: [id])
+  connectors Connector[]
+  media      Media[]
+
+  @@index([locationId], map: "ChargePoint_locationId_fkey")
+  @@index([isApproved], map: "ChargePoint_isApproved_idx")
 }
 
 model Connector {
-  id            Int         @id @default(autoincrement())
-  type          String      // AC, CCS, CHADEMO
-  maxPowerKw    Float       // Dynamic capacity parsing index mapping variable
-  status        String      @default("AVAILABLE")
-  
-  // --- NEW OCPI CONNECTOR DETAILS ---
-  standard      String      @default("IEC_62196_T2") // IEC_62196_T2, IEC_62196_T2_COMBO, CHADEMO
-  format        String      @default("SOCKET")       // CABLE, SOCKET
-  powerType     String      @default("AC_3_PHASE")   // AC_1_PHASE, AC_3_PHASE, DC
-  voltage       Int         @default(230)
-  amperage      Int         @default(32)
+  id         Int    @id @default(autoincrement())
+  type       String // AC, CCS, CHADEMO
+  maxPowerKw Float
+  status     String @default("AVAILABLE")
+
+  // --- OCPI CONNECTOR DETAILS ---
+  standard           String  @default("IEC_62196_T2")
+  format             String  @default("SOCKET")
+  powerType          String  @default("AC_3_PHASE")
+  voltage            Int     @default(230)
+  amperage           Int     @default(32)
+  termsAndConditions String? @db.Text
 
   // Relations
   chargePointId Int
   chargePoint   ChargePoint @relation(fields: [chargePointId], references: [id])
-  
-  tariffId      Int?
-  tariff        Tariff?     @relation(fields: [tariffId], references: [id])
-  
-  sessions      Session[]
+
+  tariffId Int?
+  tariff   Tariff? @relation(fields: [tariffId], references: [id])
+
+  sessions Session[]
+
+  @@index([chargePointId], map: "Connector_chargePointId_fkey")
+  @@index([tariffId], map: "Connector_tariffId_fkey")
 }
 
 // ------------------------------------------------------
@@ -132,15 +165,17 @@ model Connector {
 // ------------------------------------------------------
 
 model Tariff {
-  id          Int         @id @default(autoincrement())
-  name        String      
+  id          Int    @id @default(autoincrement())
+  name        String
   pricePerKwh Float
-  currency    String      @default("GBP")
-  
+  currency    String @default("GBP")
+
   // Relations
-  companyId   Int
-  company     Company     @relation(fields: [companyId], references: [id])
-  connectors  Connector[]
+  companyId  Int
+  company    Company     @relation(fields: [companyId], references: [id])
+  connectors Connector[]
+
+  @@index([companyId], map: "Tariff_companyId_fkey")
 }
 
 model Session {
@@ -150,41 +185,49 @@ model Session {
   kwhConsumed Float     @default(0)
   totalCost   Float     @default(0)
   status      String    @default("ACTIVE") // ACTIVE, COMPLETED, FAULTED
-  
+
   // Relations
   connectorId Int
   connector   Connector @relation(fields: [connectorId], references: [id])
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectorId], map: "Session_connectorId_fkey")
 }
 
 model Media {
-  id            Int          @id @default(autoincrement())
-  url           String       
-  type          String       
-  uploadedAt    DateTime     @default(now())
+  id         Int      @id @default(autoincrement())
+  url        String
+  type       String
+  category   String   @default("ENTRANCE") // ENTRANCE, CHARGER, NETWORK
+  uploadedAt DateTime @default(now())
 
-  // Relations - Optional fields allow SetNull/Restrict in MySQL smoothly
-  locationId    Int?
-  location      Location?    @relation(fields: [locationId], references: [id])
-  
+  // Relations
+  locationId Int?
+  location   Location? @relation(fields: [locationId], references: [id])
+
   chargePointId Int?
   chargePoint   ChargePoint? @relation(fields: [chargePointId], references: [id])
+
+  @@index([locationId], map: "Media_locationId_fkey")
+  @@index([chargePointId], map: "Media_chargePointId_fkey")
 }
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
-  action    String   
-  entity    String   
-  entityId  Int      
-  details   String   
-  ipAddress String?  // <-- Added this string attribute variable to store request vectors natively
+  action    String
+  entity    String
+  entityId  Int
+  details   String
+  ipAddress String?
   timestamp DateTime @default(now())
 
   // Relations
-  userId    Int?
-  user      User?    @relation(fields: [userId], references: [id])
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "AuditLog_userId_fkey")
 }
 
 model ApiKey {
@@ -193,9 +236,11 @@ model ApiKey {
   name      String   // e.g., "ZapMap Production Key"
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  
+
   companyId Int
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId], map: "ApiKey_companyId_fkey")
 }
 
 model SystemConfig {

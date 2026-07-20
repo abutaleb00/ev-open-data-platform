@@ -5,9 +5,19 @@ npx prisma generate
 
 # 2. Force a structured migration sequence instead of db push
 # This tells Prisma to safely drop the relationship constraints *before* altering indexes
-npx prisma migrate dev --name add_ip_address_tracking
+npx prisma migrate dev --name new_api-data
 
 
 mysql -u root -p
 use EVChargePointDB
 SHOW DATABASES;
+
+
+# 1. Synchronize the database schema cleanly
+npx prisma db push --accept-data-loss
+
+# 2. Re-generate your Prisma client definitions
+npx prisma generate
+
+# 3. Restart your PM2 application runner
+pm2 restart all

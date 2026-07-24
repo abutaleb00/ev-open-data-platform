@@ -11,7 +11,6 @@ const getClientIp = (req) => {
     return req.ip || req.socket.remoteAddress;
 };
 
-// 1. PUBLIC COMPLIANCE FEED REGISTRY ENDPOINT
 exports.getPublicFeed = async (req, res) => {
     try {
         const { search, companyId, page = 1, limit = 50, preview } = req.query;
@@ -125,22 +124,24 @@ exports.getPublicFeed = async (req, res) => {
                             standard: conn.standard || "IEC_62196_T2",
                             format: conn.format || "SOCKET",
                             power_type: conn.powerType || "AC_3_PHASE",
-                            max_voltage: conn.voltage || 230,
-                            max_amperage: conn.amperage || 32,
+                            max_voltage: conn.voltage !== null && conn.voltage !== undefined ? conn.voltage : 230,
+                            max_amperage: conn.amperage !== null && conn.amperage !== undefined ? conn.amperage : 32,
                             max_electric_power: conn.maxPowerKw ? Math.round(conn.maxPowerKw * 1000) : null,
                             tariff_ids: conn.tariffId ? [conn.tariffId.toString()] : [],
                             terms_and_conditions: conn.termsAndConditions || null,
                             last_updated: cp.updatedAt || new Date().toISOString(),
-                            voltage: conn.voltage || 230,
-                            amperage: conn.amperage || 32
+                            voltage: conn.voltage !== null && conn.voltage !== undefined ? conn.voltage : 230,
+                            amperage: conn.amperage !== null && conn.amperage !== undefined ? conn.amperage : 32
                         })),
                         floor_level: cp.floorLevel || null,
-                        // Pull dynamic overrides directly from db properties mapped in transaction updates
                         coordinates: cp.evseLatitude && cp.evseLongitude ? {
                             latitude: cp.evseLatitude.toString(),
                             longitude: cp.evseLongitude.toString()
                         } : null,
-                        physical_reference: cp.hardwareId ? cp.hardwareId.slice(-6) : cp.id.toString(),
+
+                        // Read explicitly from database physicalReference column first
+                        physical_reference: cp.physicalReference || (cp.hardwareId ? cp.hardwareId.slice(-6) : cp.id.toString()),
+
                         directions: cp.directions ? [{ language: "en", text: cp.directions }] : [],
                         parking_restrictions: cp.parkingRestrictions ? cp.parkingRestrictions.split(',').map(p => p.trim()) : [],
                         images: Array.isArray(parsedEvseImages) ? parsedEvseImages.map(img => ({
@@ -176,7 +177,6 @@ exports.getPublicFeed = async (req, res) => {
                     category: "ENTRANCE"
                 })),
 
-                // Return dynamic administrative JSON profile details
                 energy_mix: parsedEnergyMix ? {
                     is_green_energy: parsedEnergyMix.is_green_energy ?? false,
                     supplier_name: parsedEnergyMix.supplier_name || null,
@@ -800,23 +800,203 @@ exports.patchExternalLocation = async (req, res) => {
     }
 };
 
-// PATCH: Partial update for EVSE status / properties
+// PATCH: Comprehensive update for EVSE hardware and nested connectors
 exports.patchExternalEvse = async (req, res) => {
     try {
-        const { evseId } = req.params;
+        const { locationId, evseId } = req.params;
 
-        // Matches hardwareId string (e.g., "*Ada*EGBEV0667A") or autoincrement ID
-        const updatedEvse = await prisma.chargePoint.updateMany({
+        // 1. Find the target ChargePoint record
+        const parsedLocationId = !isNaN(parseInt(locationId)) ? parseInt(locationId) : null;
+
+        const existingEvse = await prisma.chargePoint.findFirst({
             where: {
                 OR: [
                     { hardwareId: evseId },
                     { id: !isNaN(parseInt(evseId)) ? parseInt(evseId) : -1 }
-                ]
+                ],
+                ...(parsedLocationId ? { locationId: parsedLocationId } : {})
             },
-            data: { ...req.body }
+            include: { connectors: true }
         });
 
-        return res.status(200).json({ success: true, message: "EVSE updated successfully.", data: updatedEvse });
+        if (!existingEvse) {
+            return res.status(404).json({ success: false, message: `EVSE unit "${evseId}" not found.` });
+        }
+
+        // 2. Destructure payload
+        const {
+            // Fields requiring explicit database field mapping
+            physical_reference,
+            physicalReference,
+
+            // Read-only / unmapped OCPI fields to strip/ignore
+            last_updated,
+            lastUpdated,
+            uid,
+            evse_id,
+
+            // Fields to explicitly sanitize and format
+            status,
+            floor_level,
+            floorLevel,
+            capabilities,
+            status_schedule,
+            statusSchedule,
+            parking_restrictions,
+            parkingRestrictions,
+            directions,
+            coordinates,
+            images,
+            connectors,
+            ...otherFields
+        } = req.body;
+
+        const evseUpdateData = { ...otherFields };
+
+        // Explicit physical reference mapping
+        if (physical_reference !== undefined || physicalReference !== undefined) {
+            evseUpdateData.physicalReference = physical_reference !== undefined ? physical_reference : physicalReference;
+        }
+
+        // Status & Floor level
+        if (status !== undefined) evseUpdateData.status = status;
+        if (floor_level !== undefined || floorLevel !== undefined) {
+            evseUpdateData.floorLevel = floor_level !== undefined ? floor_level : floorLevel;
+        }
+
+        // Capabilities (Convert Array -> Comma-Separated String)
+        if (capabilities !== undefined) {
+            evseUpdateData.capabilities = Array.isArray(capabilities) ? capabilities.join(',') : capabilities;
+        }
+
+        // Status Schedule (Convert Array/Object -> JSON String)
+        if (status_schedule !== undefined || statusSchedule !== undefined) {
+            const rawSchedule = status_schedule !== undefined ? status_schedule : statusSchedule;
+            evseUpdateData.statusSchedule = typeof rawSchedule === 'object' ? JSON.stringify(rawSchedule) : rawSchedule;
+        }
+
+        // Parking Restrictions (Convert Array -> Comma-Separated String)
+        if (parking_restrictions !== undefined || parkingRestrictions !== undefined) {
+            const rawRestrictions = parking_restrictions !== undefined ? parking_restrictions : parkingRestrictions;
+            evseUpdateData.parkingRestrictions = Array.isArray(rawRestrictions) ? rawRestrictions.join(',') : rawRestrictions;
+        }
+
+        // Directions (Extract text if passed as OCPI array [{ language: 'en', text: '...' }])
+        if (directions !== undefined) {
+            if (Array.isArray(directions)) {
+                evseUpdateData.directions = directions.length > 0 ? (directions[0].text || JSON.stringify(directions)) : null;
+            } else if (typeof directions === 'object' && directions !== null) {
+                evseUpdateData.directions = directions.text || JSON.stringify(directions);
+            } else {
+                evseUpdateData.directions = directions;
+            }
+        }
+
+        // Custom Coordinates Overrides
+        if (coordinates && typeof coordinates === 'object') {
+            if (coordinates.latitude !== undefined) evseUpdateData.evseLatitude = parseFloat(coordinates.latitude);
+            if (coordinates.longitude !== undefined) evseUpdateData.evseLongitude = parseFloat(coordinates.longitude);
+        }
+
+        // Images Array (Convert -> JSON String)
+        if (images !== undefined) {
+            evseUpdateData.evseImages = typeof images === 'object' ? JSON.stringify(images) : images;
+        }
+
+        // 3. Update the ChargePoint Record
+        await prisma.chargePoint.update({
+            where: { id: existingEvse.id },
+            data: evseUpdateData
+        });
+
+        // 4. Update Child Connectors if included in the payload
+        if (Array.isArray(connectors) && connectors.length > 0) {
+            for (const conn of connectors) {
+                const connId = parseInt(conn.id);
+                if (isNaN(connId)) continue;
+
+                const {
+                    last_updated: connLastUpdated,
+                    lastUpdated: connLastUpdatedCamel,
+                    tariff_ids,
+                    tariffId,
+                    status: connStatus,
+                    standard,
+                    format,
+                    power_type,
+                    powerType,
+                    max_voltage,
+                    voltage,
+                    max_amperage,
+                    amperage,
+                    max_electric_power,
+                    maxPowerKw,
+                    terms_and_conditions,
+                    termsAndConditions
+                } = conn;
+
+                const connectorUpdateData = {};
+
+                if (connStatus !== undefined) connectorUpdateData.status = connStatus;
+                if (standard !== undefined) connectorUpdateData.standard = standard;
+                if (format !== undefined) connectorUpdateData.format = format;
+
+                if (power_type !== undefined || powerType !== undefined) {
+                    connectorUpdateData.powerType = power_type !== undefined ? power_type : powerType;
+                }
+
+                // Voltage mapping
+                if (max_voltage !== undefined || voltage !== undefined) {
+                    connectorUpdateData.voltage = parseInt(voltage !== undefined ? voltage : max_voltage);
+                }
+
+                // Amperage mapping
+                if (max_amperage !== undefined || amperage !== undefined) {
+                    connectorUpdateData.amperage = parseInt(amperage !== undefined ? amperage : max_amperage);
+                }
+
+                // Power Kw mapping
+                if (max_electric_power !== undefined || maxPowerKw !== undefined) {
+                    const rawPower = max_electric_power !== undefined ? (max_electric_power / 1000) : maxPowerKw;
+                    connectorUpdateData.maxPowerKw = parseFloat(rawPower);
+                }
+
+                // Terms and Conditions mapping
+                if (terms_and_conditions !== undefined || termsAndConditions !== undefined) {
+                    connectorUpdateData.termsAndConditions = terms_and_conditions !== undefined ? terms_and_conditions : termsAndConditions;
+                }
+
+                // Tariff Assignment
+                if (tariffId !== undefined) {
+                    connectorUpdateData.tariffId = parseInt(tariffId);
+                } else if (Array.isArray(tariff_ids) && tariff_ids.length > 0) {
+                    connectorUpdateData.tariffId = parseInt(tariff_ids[0]);
+                }
+
+                if (Object.keys(connectorUpdateData).length > 0) {
+                    await prisma.connector.updateMany({
+                        where: {
+                            id: connId,
+                            chargePointId: existingEvse.id
+                        },
+                        data: connectorUpdateData
+                    });
+                }
+            }
+        }
+
+        // 5. Fetch refreshed record with connectors
+        const fullUpdatedEvse = await prisma.chargePoint.findUnique({
+            where: { id: existingEvse.id },
+            include: { connectors: true }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "EVSE and associated connectors updated successfully.",
+            data: fullUpdatedEvse
+        });
+
     } catch (error) {
         console.error("Delta EVSE update error:", error);
         return res.status(500).json({ success: false, message: "Failed to apply EVSE update." });

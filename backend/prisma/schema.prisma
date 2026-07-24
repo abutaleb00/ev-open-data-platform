@@ -106,6 +106,7 @@ model ChargePoint {
 
   // --- OCPI EVSE ATTRIBUTES ---
   floorLevel          String?
+  physicalReference   String?
   statusSchedule      String? @db.Text
   parkingRestrictions String? @db.Text
   directions          String? @db.Text

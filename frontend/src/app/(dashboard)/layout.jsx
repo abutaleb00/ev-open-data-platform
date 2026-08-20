@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }) {
     const dashboardHref = user?.role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/company/dashboard';
 
     // ----------------------------------------------------------------------
-    // 1. NAVIGATION DECLARATION DECK (Moved Up to Fix the Initialization Crash)
+    // 1. NAVIGATION DECLARATION DECK
     // ----------------------------------------------------------------------
     const MENU_ITEMS = [
         {
@@ -45,7 +45,7 @@ export default function DashboardLayout({ children }) {
                 { label: 'Operators Index', href: '/super-admin/companies' },
                 { label: 'Platform Users', href: '/super-admin/users' },
                 { label: 'Approvals Queue', href: '/super-admin/approvals' },
-                { label: 'System Alerts', href: '/maintenance' } 
+                { label: 'System Alerts', href: '/maintenance' }
             ]
         },
         {
@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }) {
             icon: Activity,
             roles: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'STAFF'],
             submenu: [
-                { label: 'Live Sessions', href: '/sessions/live' } 
+                { label: 'Live Sessions', href: '/sessions/live' }
             ]
         },
         {
@@ -81,7 +81,9 @@ export default function DashboardLayout({ children }) {
             roles: ['SUPER_ADMIN', 'COMPANY_ADMIN'],
             submenu: [
                 { label: 'Data Preview', href: '/open-data/preview' },
-                { label: 'API Keys', href: '/open-data/keys' }
+                { label: 'API Keys', href: '/open-data/keys' },
+                { label: 'Traffic Analytics', href: '/super-admin/traffic-analytics' },
+                { label: 'Request Audit Logs', href: '/super-admin/request-logs' }
             ]
         },
         {
@@ -100,7 +102,7 @@ export default function DashboardLayout({ children }) {
             label: 'Company Settings',
             icon: Building2,
             href: '/company/settings',
-            roles: ['COMPANY_ADMIN'] 
+            roles: ['COMPANY_ADMIN']
         },
         {
             label: 'Profile Settings',
@@ -117,8 +119,7 @@ export default function DashboardLayout({ children }) {
     // ----------------------------------------------------------------------
     useEffect(() => {
         setIsMobileOpen(false);
-        
-        // This loop now cleanly evaluates because authorizedMenu is initialized above!
+
         authorizedMenu.forEach(item => {
             if (item.submenu) {
                 const hasActiveChild = item.submenu.some(sub => {
@@ -130,7 +131,7 @@ export default function DashboardLayout({ children }) {
                 }
             }
         });
-    }, [pathname, user]); // Added user dependency to catch variations during session changes
+    }, [pathname, user]);
 
     useEffect(() => {
         const syncUserProfile = async () => {
@@ -176,6 +177,8 @@ export default function DashboardLayout({ children }) {
             'tariffs': 'Commercial Tariff Plans',
             'keys': 'API Integration Tokens',
             'preview': 'Dataset Matrix Explorer',
+            'traffic-analytics': 'API Request Analytics',
+            'request-logs': 'IP Traffic Audit Logs',
             'settings': 'Personal Account Settings',
             'company-settings': 'Corporate Tenancy Partition Configs',
             'audit': 'Security Ledger Audit Trails',
@@ -184,7 +187,7 @@ export default function DashboardLayout({ children }) {
 
         const activeSlug = pathname.split('/').pop() || 'dashboard';
         const rawTitle = routeTitles[activeSlug] || activeSlug.replace('-', ' ');
-        
+
         if (typeof window !== 'undefined') {
             document.title = `${rawTitle.toUpperCase()} | EV Data Hub`;
         }
@@ -219,7 +222,7 @@ export default function DashboardLayout({ children }) {
         <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans text-slate-900 selection:bg-slate-900 selection:text-white relative">
 
             {isMobileOpen && (
-                <div 
+                <div
                     onClick={() => setIsMobileOpen(false)}
                     className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300"
                 />
@@ -230,7 +233,7 @@ export default function DashboardLayout({ children }) {
                 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
                 ${isCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72
             `}>
-                <button 
+                <button
                     onClick={() => setIsMobileOpen(false)}
                     className="absolute right-4 top-5 p-2 bg-slate-800 text-slate-400 rounded-xl hover:text-white lg:hidden cursor-pointer"
                 >
@@ -244,7 +247,7 @@ export default function DashboardLayout({ children }) {
                     {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                 </button>
 
-                <Link 
+                <Link
                     href={dashboardHref}
                     className="h-20 flex items-center border-b border-slate-800/60 shrink-0 px-6 justify-between hover:bg-slate-800/20 transition-colors cursor-pointer group"
                 >
@@ -260,15 +263,15 @@ export default function DashboardLayout({ children }) {
                     <nav className="space-y-1">
                         {authorizedMenu.map((item) => {
                             const Icon = item.icon;
-                            
+
                             const cleanItemHref = item.href ? item.href.replace(/\/\(dashboard\)/, '') : '';
                             const isActiveLink = !item.submenu && (pathname === cleanItemHref || pathname.startsWith(cleanItemHref + '/'));
-                            
+
                             const isSubmenuActive = item.submenu && item.submenu.some(sub => {
                                 const cleanSubHref = sub.href.replace(/\/\(dashboard\)/, '');
                                 return pathname === cleanSubHref || pathname.startsWith(cleanSubHref + '/');
                             });
-                            
+
                             const isExpanded = openSubmenu === item.label;
 
                             return (
@@ -277,11 +280,10 @@ export default function DashboardLayout({ children }) {
                                         <>
                                             <button
                                                 onClick={() => handleSubmenuToggle(item.label)}
-                                                className={`flex cursor-pointer items-center justify-between w-full rounded-xl px-3 py-2.5 transition-all text-left ${
-                                                    isSubmenuActive 
-                                                        ? 'bg-[#1E293B] text-amber-400 font-extrabold shadow-inner' 
+                                                className={`flex cursor-pointer items-center justify-between w-full rounded-xl px-3 py-2.5 transition-all text-left ${isSubmenuActive
+                                                        ? 'bg-[#1E293B] text-amber-400 font-extrabold shadow-inner'
                                                         : 'text-slate-400 hover:bg-slate-800/40 hover:text-white'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className={`flex items-center ${(isCollapsed && !isMobileOpen) ? 'justify-center w-full' : 'space-x-3'}`}>
                                                     <Icon size={16} className={isSubmenuActive ? 'text-amber-400' : 'text-slate-400'} />
@@ -292,21 +294,20 @@ export default function DashboardLayout({ children }) {
                                                 )}
                                             </button>
 
-                                            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-56 mt-1 opacity-100' : 'max-h-0 opacity-0'}`}>
+                                            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-72 mt-1 opacity-100' : 'max-h-0 opacity-0'}`}>
                                                 <div className="pl-4 pr-2 py-1 space-y-1 border-l border-slate-800 ml-5">
                                                     {item.submenu.map((sub) => {
                                                         const cleanSubPath = sub.href.replace(/\/\(dashboard\)/, '');
                                                         const isSubActive = pathname === cleanSubPath || pathname.startsWith(cleanSubPath + '/');
-                                                        
+
                                                         return (
                                                             <Link
-                                                                key={sub.label} 
+                                                                key={sub.label}
                                                                 href={sub.href}
-                                                                className={`block py-2 px-3 rounded-lg text-xs transition-all ${
-                                                                    isSubActive 
-                                                                        ? 'bg-[#FFAF00] text-white font-black shadow-md' 
+                                                                className={`block py-2 px-3 rounded-lg text-xs transition-all ${isSubActive
+                                                                        ? 'bg-[#FFAF00] text-white font-black shadow-md'
                                                                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="flex items-center">
                                                                     <span className={`w-1.5 h-1.5 rounded-full mr-2.5 shrink-0 ${isSubActive ? 'bg-white shadow-sm' : 'bg-slate-600'}`}></span>
@@ -321,11 +322,10 @@ export default function DashboardLayout({ children }) {
                                     ) : (
                                         <Link
                                             href={item.href}
-                                            className={`flex items-center rounded-xl px-3 py-2.5 transition-all ${
-                                                isActiveLink 
-                                                    ? 'bg-[#FFAF00] text-white font-black shadow-md' 
+                                            className={`flex items-center rounded-xl px-3 py-2.5 transition-all ${isActiveLink
+                                                    ? 'bg-[#FFAF00] text-white font-black shadow-md'
                                                     : 'text-slate-400 hover:bg-slate-800/40 hover:text-white'
-                                            } ${(isCollapsed && !isMobileOpen) ? 'justify-center' : 'space-x-3'}`}
+                                                } ${(isCollapsed && !isMobileOpen) ? 'justify-center' : 'space-x-3'}`}
                                         >
                                             <Icon size={16} className={isActiveLink ? 'text-white' : 'text-slate-400'} />
                                             {(!isCollapsed || isMobileOpen) && <span className="text-xs font-bold uppercase tracking-wider">{item.label}</span>}
@@ -353,7 +353,7 @@ export default function DashboardLayout({ children }) {
             <div className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
                 <header className="h-20 bg-white/80 border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 shrink-0 z-20 sticky top-0 backdrop-blur-md">
                     <div className="flex items-center space-x-4">
-                        <button 
+                        <button
                             onClick={() => setIsMobileOpen(true)}
                             className="lg:hidden text-slate-500 hover:text-slate-800 transition-colors cursor-pointer p-1.5 hover:bg-slate-100 rounded-xl"
                         >

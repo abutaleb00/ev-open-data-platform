@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import {
     Globe, Server, ShieldCheck, MapPin, DollarSign,
-    Layers, Terminal, CheckCircle2, AlertCircle, RefreshCw
+    Layers, Terminal, CheckCircle2, AlertCircle, RefreshCw, Filter
 } from 'lucide-react';
 
 export default function DatasetPreviewPage() {
@@ -14,20 +14,38 @@ export default function DatasetPreviewPage() {
     const [schemaValid, setSchemaValid] = useState(null);
     const [activeTab, setActiveTab] = useState('summary');
 
+    // Operator Reference Filter & Rate Limit Alerts
+    const [operatorRef, setOperatorRef] = useState('');
+    const [rateLimited, setRateLimited] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+
     const fetchPublicFeeds = async () => {
         setLoading(true);
         setSchemaValid(null);
+        setRateLimited(false);
+        setErrorMessage('');
+
         try {
-            // FIXED: Shift targets from open global routes directly over your isolated tenant workspace gateways
+            const feedParams = operatorRef.trim() ? `?operator_reference_id=${encodeURIComponent(operatorRef.trim())}` : '';
+
             const [locResponse, tariffResponse] = await Promise.allSettled([
-                api.get('/open-data/preview/feed'),
+                api.get(`/open-data/preview/feed${feedParams}`),
                 api.get('/open-data/preview/tariffs')
             ]);
 
+            // Handle Feed Response
             if (locResponse.status === 'fulfilled' && locResponse.value.data?.data) {
                 setFeedData(locResponse.value.data.data);
                 validateFeedSchema(locResponse.value.data.data);
+            } else if (locResponse.status === 'rejected') {
+                if (locResponse.reason?.response?.status === 429) {
+                    setRateLimited(true);
+                } else {
+                    setErrorMessage(locResponse.reason?.response?.data?.message || 'Failed to sync location feeds.');
+                }
             }
+
+            // Handle Tariff Response
             if (tariffResponse.status === 'fulfilled' && tariffResponse.value.data?.data) {
                 setTariffData(tariffResponse.value.data.data);
             }
@@ -66,14 +84,44 @@ export default function DatasetPreviewPage() {
                     </div>
                 </div>
 
-                <button
-                    onClick={fetchPublicFeeds} disabled={loading}
-                    className="flex cursor-pointer items-center space-x-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 font-black text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
-                >
-                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-                    <span>Sync Tenant Feeds</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                    {/* Operator Reference ID Quick Filter */}
+                    <div className="relative flex items-center">
+                        <Filter size={14} className="absolute left-3 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Operator Ref ID..."
+                            value={operatorRef}
+                            onChange={(e) => setOperatorRef(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && fetchPublicFeeds()}
+                            className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-medium focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 w-full sm:w-48"
+                        />
+                    </div>
+
+                    <button
+                        onClick={fetchPublicFeeds} disabled={loading}
+                        className="flex cursor-pointer items-center justify-center space-x-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 font-black text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                        <span>Sync Feeds</span>
+                    </button>
+                </div>
             </div>
+
+            {/* Rate Limit / Error Notifications */}
+            {rateLimited && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center space-x-3 text-amber-800 text-xs font-bold">
+                    <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                    <span>30-Second Rate Limit Active: Calls are throttled to 1 request per 30 seconds per IP. Please wait before syncing again.</span>
+                </div>
+            )}
+
+            {errorMessage && (
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center space-x-3 text-rose-800 text-xs font-bold">
+                    <AlertCircle size={18} className="text-rose-600 shrink-0" />
+                    <span>{errorMessage}</span>
+                </div>
+            )}
 
             {/* Metrics Matrix Summary Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

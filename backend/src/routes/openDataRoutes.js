@@ -3,12 +3,13 @@ const router = express.Router();
 const openDataController = require('../controllers/openDataController');
 const { protect, verifyPartnerApiKey } = require('../middlewares/authMiddleware');
 const { checkLocationsGate, checkTariffsGate } = require('../middlewares/maintenanceInterceptor');
+const { feedRateLimiter, logApiRequest } = require('../middlewares/requestTracker');
 
 // ------------------------------------------------------
 // 1. PUBLIC UNSECURED DATA OPEN STREAMS
 // ------------------------------------------------------
-// Feeds are completely open to third-party endpoints and consumer map clients
-router.get('/feed', checkLocationsGate, openDataController.getPublicFeed);
+// Feeds are open to third-party endpoints with 30s rate limiting and request tracking
+router.get('/feed', feedRateLimiter, logApiRequest, checkLocationsGate, openDataController.getPublicFeed);
 router.get('/tariffs', checkTariffsGate, openDataController.getPublicTariffs);
 
 
@@ -25,10 +26,13 @@ router.patch('/external/evses/:evseId/connectors/:connectorId', verifyPartnerApi
 
 
 // ------------------------------------------------------
-// 3. ADMIN EDITABLE PORTAL DATA UPDATES
+// 3. ADMIN EDITABLE PORTAL DATA UPDATES & METRICS
 // ------------------------------------------------------
 // Single API for Company Admins and Super Admins to fill in missing portal metadata
 router.patch('/location/:id/metadata', protect, openDataController.updateLocationMetadata);
+
+// Request tracking analytics & IP audit endpoint for Admin Web Portal
+router.get('/admin/traffic-metrics', protect, openDataController.getTrafficMetrics);
 
 
 // ------------------------------------------------------

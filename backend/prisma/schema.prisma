@@ -13,17 +13,20 @@ generator client {
 // ------------------------------------------------------
 
 model Company {
-  id           Int      @id @default(autoincrement())
-  name         String
-  contactEmail String
-  status       String   @default("PENDING") // PENDING, ACTIVE, SUSPENDED
-  createdAt    DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  name                String
+  operatorReferenceId String?  @unique // e.g., "684C87AD2CF745756546225ECA797E89"
+  contactEmail        String
+  status              String   @default("PENDING") // PENDING, ACTIVE, SUSPENDED
+  createdAt           DateTime @default(now())
 
   // Relations
   users     User[]
   locations Location[]
   tariffs   Tariff[]
   apiKeys   ApiKey[]
+
+  @@index([operatorReferenceId], map: "Company_operatorRef_idx")
 }
 
 model User {
@@ -54,13 +57,14 @@ model User {
 // ------------------------------------------------------
 
 model Location {
-  id        Int     @id @default(autoincrement())
-  name      String  // e.g., "Spencer 000024"
-  address   String
-  postcode  String
-  latitude  Float
-  longitude Float
-  amenities String? // Maps to "facilities" string list in feed
+  id                  Int     @id @default(autoincrement())
+  name                String  // e.g., "Spencer 000024"
+  address             String
+  postcode            String
+  latitude            Float
+  longitude           Float
+  amenities           String? // Maps to "facilities" string list in feed
+  operatorReferenceId String? // Optional override or mapped from Company
 
   // --- OCPI DATA ATTRIBUTES ---
   countryCode String  @default("GB")
@@ -97,12 +101,13 @@ model Location {
 
   @@index([companyId], map: "Location_companyId_fkey")
   @@index([isApproved], map: "Location_isApproved_idx")
+  @@index([operatorReferenceId], map: "Location_operatorRef_idx")
 }
 
 model ChargePoint {
-  id         Int    @id @default(autoincrement())
-  hardwareId String @unique // evse_id link pointer
-  status     String @default("UNKNOWN") // AVAILABLE, OCCUPIED, FAULTED, UNKNOWN
+  id                Int     @id @default(autoincrement())
+  hardwareId        String  @unique // evse_id link pointer
+  status            String  @default("UNKNOWN") // AVAILABLE, OCCUPIED, FAULTED, UNKNOWN
 
   // --- OCPI EVSE ATTRIBUTES ---
   floorLevel          String?
@@ -253,4 +258,19 @@ model SystemConfig {
   portalBlocked    Boolean  @default(false)
   keysBlocked      Boolean  @default(false)
   updatedAt        DateTime @updatedAt
+}
+
+model RequestLog {
+  id                  Int      @id @default(autoincrement())
+  ipAddress           String
+  endpoint            String
+  method              String
+  operatorReferenceId String?
+  statusCode          Int
+  userAgent           String?  @db.Text
+  createdAt           DateTime @default(now())
+
+  @@index([ipAddress], map: "RequestLog_ip_idx")
+  @@index([operatorReferenceId], map: "RequestLog_operatorRef_idx")
+  @@index([createdAt], map: "RequestLog_createdAt_idx")
 }

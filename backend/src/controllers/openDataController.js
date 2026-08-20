@@ -13,7 +13,7 @@ const getClientIp = (req) => {
 
 exports.getPublicFeed = async (req, res) => {
     try {
-        const { search, companyId, page = 1, limit = 50, preview } = req.query;
+        const { search, companyId, operator_reference_id, page = 1, limit = 50, preview } = req.query;
 
         const parsedPage = Math.max(1, parseInt(page) || 1);
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit) || 50));
@@ -24,6 +24,14 @@ exports.getPublicFeed = async (req, res) => {
 
         // Define root query filter criteria
         const whereClause = shouldFilterApproved ? { isApproved: true } : {};
+
+        // Filter by Operator Reference ID if passed in query string
+        if (operator_reference_id) {
+            whereClause.OR = [
+                { operatorReferenceId: String(operator_reference_id) },
+                { company: { operatorReferenceId: String(operator_reference_id) } }
+            ];
+        }
 
         // Tenancy filter boundary integration
         if (companyId && !isNaN(parseInt(companyId))) {
@@ -65,7 +73,7 @@ exports.getPublicFeed = async (req, res) => {
                     media: {
                         select: { url: true, type: true }
                     },
-                    company: { select: { name: true } }
+                    company: { select: { name: true, operatorReferenceId: true } }
                 },
                 orderBy: { createdAt: 'desc' }
             }),
@@ -192,8 +200,9 @@ exports.getPublicFeed = async (req, res) => {
         });
 
         res.json({
-            name: "OK",
-            message: "ok",
+            name: "Location",
+            operator_reference_id: operator_reference_id || null,
+            message: "Success",
             meta: {
                 total_records: totalCount,
                 current_page: parsedPage,
@@ -206,6 +215,52 @@ exports.getPublicFeed = async (req, res) => {
     } catch (error) {
         console.error("OCPI data compilation fault:", error);
         res.status(500).json({ name: "ERROR", message: "Failed to compile compliance open data stream matrix." });
+    }
+};
+
+// GET Admin Portal Request Metrics & IP Logs
+exports.getTrafficMetrics = async (req, res) => {
+    try {
+        const { days = 7, limit = 50, operator_reference_id } = req.query;
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(days));
+
+        const whereClause = {
+            createdAt: { gte: startDate }
+        };
+
+        if (operator_reference_id) {
+            whereClause.operatorReferenceId = String(operator_reference_id);
+        }
+
+        const [totalRequests, topIPs, recentLogs] = await prisma.$transaction([
+            prisma.requestLog.count({ where: whereClause }),
+            prisma.requestLog.groupBy({
+                by: ['ipAddress'],
+                where: whereClause,
+                _count: { ipAddress: true },
+                orderBy: { _count: { ipAddress: 'desc' } },
+                take: 10
+            }),
+            prisma.requestLog.findMany({
+                where: whereClause,
+                take: parseInt(limit),
+                orderBy: { createdAt: 'desc' }
+            })
+        ]);
+
+        return res.json({
+            success: true,
+            summary: {
+                timeframe_days: parseInt(days),
+                total_requests: totalRequests
+            },
+            top_client_ips: topIPs.map(i => ({ ip: i.ipAddress, count: i._count.ipAddress })),
+            recent_logs: recentLogs
+        });
+    } catch (error) {
+        console.error("Error fetching traffic metrics:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch traffic metrics." });
     }
 };
 
@@ -912,8 +967,8 @@ exports.patchExternalEvse = async (req, res) => {
         // 4. Update Child Connectors if included in the payload
         if (Array.isArray(connectors) && connectors.length > 0) {
             for (const conn of connectors) {
-                const connId = parseInt(conn.id);
-                if (isNaN(connId)) continue;
+                const connIdNum = parseInt(conn.id);
+                const isNumericId = !isNaN(connIdNum);
 
                 const {
                     last_updated: connLastUpdated,
@@ -946,12 +1001,12 @@ exports.patchExternalEvse = async (req, res) => {
                 }
 
                 // Voltage mapping
-                if (max_voltage !== undefined || voltage !== undefined) {
+                if (voltage !== undefined || max_voltage !== undefined) {
                     connectorUpdateData.voltage = parseInt(voltage !== undefined ? voltage : max_voltage);
                 }
 
                 // Amperage mapping
-                if (max_amperage !== undefined || amperage !== undefined) {
+                if (amperage !== undefined || max_amperage !== undefined) {
                     connectorUpdateData.amperage = parseInt(amperage !== undefined ? amperage : max_amperage);
                 }
 
@@ -966,21 +1021,30 @@ exports.patchExternalEvse = async (req, res) => {
                     connectorUpdateData.termsAndConditions = terms_and_conditions !== undefined ? terms_and_conditions : termsAndConditions;
                 }
 
-                // Tariff Assignment
+                // Tariff Assignment (extract string/numeric tariff IDs safely)
                 if (tariffId !== undefined) {
-                    connectorUpdateData.tariffId = parseInt(tariffId);
+                    connectorUpdateData.tariffId = parseInt(tariffId) || null;
                 } else if (Array.isArray(tariff_ids) && tariff_ids.length > 0) {
-                    connectorUpdateData.tariffId = parseInt(tariff_ids[0]);
+                    connectorUpdateData.tariffId = parseInt(tariff_ids[0]) || null;
                 }
 
                 if (Object.keys(connectorUpdateData).length > 0) {
-                    await prisma.connector.updateMany({
-                        where: {
-                            id: connId,
-                            chargePointId: existingEvse.id
-                        },
-                        data: connectorUpdateData
-                    });
+                    // Update either by primary key numerical ID or batch update child connectors under this chargePoint
+                    if (isNumericId) {
+                        await prisma.connector.updateMany({
+                            where: {
+                                id: connIdNum,
+                                chargePointId: existingEvse.id
+                            },
+                            data: connectorUpdateData
+                        });
+                    } else {
+                        // If connector ID passed as string reference, update all connectors belonging to this ChargePoint
+                        await prisma.connector.updateMany({
+                            where: { chargePointId: existingEvse.id },
+                            data: connectorUpdateData
+                        });
+                    }
                 }
             }
         }

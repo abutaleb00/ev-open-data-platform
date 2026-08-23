@@ -34,6 +34,7 @@ exports.getPublicDataset = async (req, res) => {
                 partyId: true,
 
                 company: { select: { name: true, contactEmail: true } },
+                media: { select: { url: true, type: true } },
                 chargePoints: {
                     where: { isApproved: true },
                     select: {

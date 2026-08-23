@@ -218,11 +218,22 @@ model AuditLog {
 }
 
 model ApiKey {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  // Deterministic HMAC hash - used only for the fast, indexed auth lookup in
+  // authMiddleware.verifyPartnerApiKey. Never decryptable, never shown to users.
+  key          String   @unique
+  // AES-256-GCM encrypted copy of the raw key - lets an authorized viewer (Super
+  // Admin, or the owning company) copy the value again anytime after creation, not
+  // just once. Nullable because keys created before this field existed have no
+  // recoverable value (only their hash was ever stored) and can't be backfilled.
+  encryptedKey String?  @db.Text
+  name         String
+  isActive     Boolean  @default(true)
+  // Master/aggregator keys may sync data for ANY operator by operator_reference_id
+  // (see operatorSyncController.syncOperatorData) - only a SUPER_ADMIN may grant this.
+  // Regular keys are strictly confined to their own companyId.
+  isMaster     Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   companyId Int
   company   Company  @relation(fields: [companyId], references: [id])

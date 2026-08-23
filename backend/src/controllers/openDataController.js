@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
+const { hashApiKey, encryptApiKey, decryptApiKey } = require('../utils/apiKeyHash');
 
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -30,14 +31,17 @@ const parseNumericId = (val) => {
 // 1. PUBLIC OPEN DATA FEED
 exports.getPublicFeed = async (req, res) => {
     try {
-        const { search, companyId, operator_reference_id, page = 1, limit = 50, preview } = req.query;
+        const { search, companyId, operator_reference_id, page = 1, limit = 50 } = req.query;
 
         const parsedPage = Math.max(1, parseInt(page, 10) || 1);
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        const shouldFilterApproved = preview !== 'true';
-        const whereClause = shouldFilterApproved ? { isApproved: true } : {};
+        // This route is unauthenticated and public - it must always filter to
+        // moderator-approved data. Unmoderated previews are served separately via
+        // the tenant-scoped, auth-protected getDashboardFeedPreview below.
+        const shouldFilterApproved = true;
+        const whereClause = { isApproved: true };
 
         if (operator_reference_id) {
             whereClause.OR = [
@@ -492,7 +496,18 @@ exports.getCompanyKeys = async (req, res) => {
             include: { company: { select: { name: true } } },
             orderBy: { createdAt: 'desc' }
         });
-        res.json({ success: true, data: keys });
+
+        // Never return the stored auth hash itself - decrypt the recoverable copy
+        // instead so a Super Admin (or the owning company) can copy the raw value
+        // again at any time. Keys created before encryptedKey existed have no
+        // recoverable value (only their hash was ever stored) - `key` comes back
+        // null for those, and the frontend should prompt to revoke + regenerate.
+        const sanitizedKeys = keys.map(({ key, encryptedKey, ...rest }) => ({
+            ...rest,
+            key: decryptApiKey(encryptedKey)
+        }));
+
+        res.json({ success: true, data: sanitizedKeys });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Failed to fetch credentials." });
@@ -502,7 +517,7 @@ exports.getCompanyKeys = async (req, res) => {
 // 5. GENERATE API KEY
 exports.generateApiKey = async (req, res) => {
     try {
-        const { name, companyId: requestedCompanyId } = req.body;
+        const { name, companyId: requestedCompanyId, isMaster } = req.body;
         const { companyId, id: userId, role } = req.user;
         const clientIp = getClientIp(req);
 
@@ -522,13 +537,21 @@ exports.generateApiKey = async (req, res) => {
             return res.status(400).json({ success: false, message: "Key name label is required." });
         }
 
+        // Only a Super Admin may grant master/aggregator sync privileges - see
+        // operatorSyncController.syncOperatorData for what this unlocks.
+        const grantMaster = role === 'SUPER_ADMIN' && (isMaster === true || isMaster === 'true');
+
         const rawKey = `ev_live_${crypto.randomBytes(24).toString('hex')}`;
+        const hashedKey = hashApiKey(rawKey);
+        const encryptedKey = encryptApiKey(rawKey);
 
         const apiKeyRecord = await prisma.apiKey.create({
             data: {
-                key: rawKey,
+                key: hashedKey,
+                encryptedKey,
                 name: name.trim(),
-                companyId: targetCompanyId
+                companyId: targetCompanyId,
+                isMaster: grantMaster
             }
         });
 
@@ -543,10 +566,108 @@ exports.generateApiKey = async (req, res) => {
             }
         });
 
-        res.status(201).json({ success: true, data: apiKeyRecord });
+        // Never leak the encrypted blob itself - GET /open-data/keys is the
+        // supported way to recover the raw value again later (it decrypts server-side).
+        const { encryptedKey: _omit, ...safeRecord } = apiKeyRecord;
+
+        res.status(201).json({
+            success: true,
+            message: "API key generated successfully.",
+            data: { ...safeRecord, key: rawKey }
+        });
     } catch (error) {
         console.error("API Key generation error:", error);
         res.status(500).json({ success: false, message: "Failed to generate access key." });
+    }
+};
+
+// 5a. UPDATE API KEY FLAGS (currently: isMaster grant/revoke) - SUPER_ADMIN only
+exports.updateApiKeyFlags = async (req, res) => {
+    try {
+        const { role, id: userId } = req.user;
+        const keyId = parseInt(req.params.id, 10);
+        const { isMaster } = req.body;
+        const clientIp = getClientIp(req);
+
+        if (role !== 'SUPER_ADMIN') {
+            return res.status(403).json({ success: false, message: "Forbidden: Only a Super Admin may grant or revoke master-key sync privileges." });
+        }
+
+        if (isNaN(keyId)) {
+            return res.status(400).json({ success: false, message: "Invalid key ID." });
+        }
+
+        const keyRecord = await prisma.apiKey.findUnique({ where: { id: keyId } });
+
+        if (!keyRecord) {
+            return res.status(404).json({ success: false, message: "API key not found." });
+        }
+
+        const updated = await prisma.apiKey.update({
+            where: { id: keyId },
+            data: { isMaster: isMaster === true || isMaster === 'true' }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'UPDATE',
+                entity: 'API_KEY',
+                entityId: keyId,
+                details: `${updated.isMaster ? 'Granted' : 'Revoked'} master-key sync privilege on API key: "${keyRecord.name}"`,
+                ipAddress: clientIp,
+                userId: userId
+            }
+        });
+
+        const { key, encryptedKey, ...sanitized } = updated;
+        res.json({ success: true, message: "API key updated successfully.", data: sanitized });
+    } catch (error) {
+        console.error("API Key update error:", error);
+        res.status(500).json({ success: false, message: "Failed to update access key." });
+    }
+};
+
+// 5b. REVOKE API KEY
+exports.revokeApiKey = async (req, res) => {
+    try {
+        const { role, companyId, id: userId } = req.user;
+        const keyId = parseInt(req.params.id, 10);
+        const clientIp = getClientIp(req);
+
+        if (isNaN(keyId)) {
+            return res.status(400).json({ success: false, message: "Invalid key ID." });
+        }
+
+        const keyRecord = await prisma.apiKey.findUnique({ where: { id: keyId } });
+
+        if (!keyRecord) {
+            return res.status(404).json({ success: false, message: "API key not found." });
+        }
+
+        if (role !== 'SUPER_ADMIN' && keyRecord.companyId !== parseInt(companyId, 10)) {
+            return res.status(403).json({ success: false, message: "Forbidden: This key does not belong to your company." });
+        }
+
+        await prisma.apiKey.update({
+            where: { id: keyId },
+            data: { isActive: false }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'UPDATE',
+                entity: 'API_KEY',
+                entityId: keyId,
+                details: `Revoked API access token: "${keyRecord.name}"`,
+                ipAddress: clientIp,
+                userId: userId
+            }
+        });
+
+        res.json({ success: true, message: "API key revoked successfully." });
+    } catch (error) {
+        console.error("API Key revocation error:", error);
+        res.status(500).json({ success: false, message: "Failed to revoke access key." });
     }
 };
 
@@ -559,7 +680,9 @@ exports.getPublicTariffs = async (req, res) => {
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10)));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        const whereClause = {};
+        // Public, unauthenticated feed - only ever expose tariffs belonging to
+        // an actively vetted (non-suspended, non-pending) operator company.
+        const whereClause = { company: { status: 'ACTIVE' } };
 
         if (companyId) {
             whereClause.companyId = parseInt(companyId, 10);
@@ -671,10 +794,24 @@ exports.ingestExternalData = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid payload layout: 'data' must be an array." });
         }
 
+        const skippedIds = [];
+
         for (const loc of locations) {
             const cleanedLocId = parseNumericId(loc.id);
 
             if (!cleanedLocId) continue;
+
+            // Refuse to touch a record ID that already belongs to a different tenant -
+            // numeric IDs are partner-supplied and must never be trusted to cross tenants.
+            const existingLocation = await prisma.location.findUnique({
+                where: { id: cleanedLocId },
+                select: { companyId: true }
+            });
+
+            if (existingLocation && existingLocation.companyId !== companyId) {
+                skippedIds.push(cleanedLocId);
+                continue;
+            }
 
             const savedLocation = await prisma.location.upsert({
                 where: { id: cleanedLocId },
@@ -689,7 +826,8 @@ exports.ingestExternalData = async (req, res) => {
                     state: loc.state || null,
                     countryCode: loc.country_code || "GB",
                     countryISO: loc.country || "GBR",
-                    publish: loc.publish ?? true
+                    publish: loc.publish ?? true,
+                    companyId: companyId
                 },
                 create: {
                     id: cleanedLocId,
@@ -713,6 +851,18 @@ exports.ingestExternalData = async (req, res) => {
                 for (const evse of loc.evses) {
                     const hardwareIdVal = evse.evse_id || evse.uid || evse.id;
                     if (!hardwareIdVal) continue;
+
+                    // Same cross-tenant guard for charge points: hardwareId is globally unique,
+                    // so a collision must never let a partner hijack another tenant's device.
+                    const existingCp = await prisma.chargePoint.findUnique({
+                        where: { hardwareId: String(hardwareIdVal) },
+                        include: { location: { select: { companyId: true } } }
+                    });
+
+                    if (existingCp && existingCp.location.companyId !== companyId) {
+                        skippedIds.push(String(hardwareIdVal));
+                        continue;
+                    }
 
                     const savedChargePoint = await prisma.chargePoint.upsert({
                         where: { hardwareId: String(hardwareIdVal) },
@@ -759,7 +909,14 @@ exports.ingestExternalData = async (req, res) => {
             }
         }
 
-        return res.status(200).json({ success: true, message: "Data ingestion sequence completed successfully.", processedCount: locations.length });
+        return res.status(200).json({
+            success: true,
+            message: skippedIds.length > 0
+                ? "Data ingestion sequence completed with some records skipped (ID belongs to another operator)."
+                : "Data ingestion sequence completed successfully.",
+            processedCount: locations.length - skippedIds.length,
+            skippedIds
+        });
     } catch (error) {
         console.error("Partner pipeline sync error:", error);
         return res.status(500).json({ success: false, message: "Internal server error processing ingestion payload." });
@@ -884,6 +1041,16 @@ exports.patchExternalLocation = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid location ID format." });
         }
 
+        const existingLocation = await prisma.location.findUnique({ where: { id: locationId } });
+
+        if (!existingLocation) {
+            return res.status(404).json({ success: false, message: "Location not found." });
+        }
+
+        if (existingLocation.companyId !== req.partnerCompanyId) {
+            return res.status(403).json({ success: false, message: "Forbidden: This API key does not have access to the requested location." });
+        }
+
         const {
             directions,
             relatedLocations,
@@ -952,11 +1119,15 @@ exports.patchExternalEvse = async (req, res) => {
                 ],
                 ...(parsedLocationId ? { locationId: parsedLocationId } : {})
             },
-            include: { connectors: true }
+            include: { connectors: true, location: true }
         });
 
         if (!existingEvse) {
             return res.status(404).json({ success: false, message: `EVSE unit "${evseId}" not found.` });
+        }
+
+        if (existingEvse.location.companyId !== req.partnerCompanyId) {
+            return res.status(403).json({ success: false, message: "Forbidden: This API key does not have access to the requested EVSE." });
         }
 
         const {
@@ -1125,6 +1296,19 @@ exports.patchExternalConnector = async (req, res) => {
 
         if (!parsedConnectorId) {
             return res.status(400).json({ success: false, message: "Invalid connector ID format." });
+        }
+
+        const existingConnector = await prisma.connector.findUnique({
+            where: { id: parsedConnectorId },
+            include: { chargePoint: { include: { location: true } } }
+        });
+
+        if (!existingConnector) {
+            return res.status(404).json({ success: false, message: "Connector not found." });
+        }
+
+        if (existingConnector.chargePoint.location.companyId !== req.partnerCompanyId) {
+            return res.status(403).json({ success: false, message: "Forbidden: This API key does not have access to the requested connector." });
         }
 
         const { tariff_ids, tariffId, status, max_power_kw, maxPowerKw, ...otherFields } = req.body;

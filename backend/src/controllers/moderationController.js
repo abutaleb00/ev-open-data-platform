@@ -118,18 +118,18 @@ exports.moderateChargePoint = async (req, res) => {
     }
 };
 
-// Fetch the current active system maintenance and pipeline settings (ID #1)
+// Fetch the current active system maintenance and pipeline settings
 exports.getMainMaintenanceSettings = async (req, res) => {
     try {
-        // Attempt to find the single global configuration record row
-        let config = await prisma.systemConfig.findUnique({
-            where: { id: 1 }
-        });
+        // SystemConfig is a singleton table - always look it up with findFirst(),
+        // never a hardcoded ID, to stay consistent with updateMaintenanceSettings
+        // and every maintenance-gate middleware that reads this table.
+        let config = await prisma.systemConfig.findFirst();
 
-        // Fallback: If no system config row exists yet, return a mock safe state 
+        // Fallback: If no system config row exists yet, return a mock safe state
         if (!config) {
             config = {
-                id: 1,
+                id: null,
                 globalAlert: false,
                 alertMessage: "",
                 locationsBlocked: false,

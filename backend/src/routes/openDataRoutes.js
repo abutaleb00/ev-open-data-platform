@@ -120,4 +120,16 @@ router.post(
     safeMw(openDataController.generateApiKey, 'generateApiKey')
 );
 
+router.patch(
+    '/keys/:id',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.updateApiKeyFlags, 'updateApiKeyFlags')
+);
+
+router.delete(
+    '/keys/:id',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.revokeApiKey, 'revokeApiKey')
+);
+
 module.exports = router;

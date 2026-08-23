@@ -1,0 +1,1116 @@
+{
+  "info": {
+    "_postman_id": "b7e1a2c4-3f5d-4a6b-9c7e-1d2e3f4a5b6c",
+    "name": "EV Open Data Platform API",
+    "description": "Full API surface for the EV Open Data Platform backend (Express + Prisma + MySQL), covering the internal admin API (JWT-protected), the public OCPI-style open data feed (unauthenticated), and the partner integration API (x-api-key).\n\n## Setup\n1. Set the `baseUrl` collection variable (defaults to `http://localhost:5000/api/v1`).\n2. Run **Auth > Login** with a seeded account (defaults to the Super Admin created by `npx prisma db seed`) - its test script auto-saves `token`, `role`, `companyId`, and `userId` as collection variables, which every other request in this collection inherits automatically via the collection-level Bearer auth.\n3. The collection is designed to be run **top to bottom as a single Collection Run** on a completely fresh database: Companies creates a real company, Tariffs/Locations/Charge Points/Connectors/Sessions chain off each other's created IDs via test scripts, and every unique-constrained field (User.email, Company.operatorReferenceId, ChargePoint.hardwareId) uses Postman's built-in `{{$randomEmail}}`/`{{$randomInt}}` dynamic variables so re-running the whole collection never collides with a previous run.\n4. Destructive requests (all `DELETE`s, plus API key revocation) are deliberately isolated in the final **Cleanup** folder, not interleaved in the resource folders - so a full Collection Run exercises create/read/update everywhere before tearing anything down.\n5. For the **Open Data - Partner Integration** folder, run **Open Data - Developer Keys** first (in the default order) - it generates a key and immediately grants it master-sync privilege, saved into the `apiKey` variable, which the Partner Integration requests use automatically.\n\n## Response envelope conventions\n- Internal admin API (`/auth`, `/companies`, `/locations`, ... `/admin`): `{ success, data?, message? }`.\n- Public OCPI-style feeds (`GET /open-data/feed`, `GET /open-data/tariffs`, `GET /public/dataset`): `{ name, message, meta, data }` - no `success` key, by design.\n\n## Multi-tenancy & roles\n- `SUPER_ADMIN`: unrestricted access to every company's data, plus platform-wide admin/moderation endpoints. Locations/Charge Points it creates are auto-approved.\n- `COMPANY_ADMIN` / `STAFF`: scoped to their own `companyId` everywhere. Requests marked **(Super Admin only)** will 403 for these roles. Locations/Charge Points they create start `isApproved: false` and need approval via **Moderation** before appearing on the public feed.\n- Newly self-registered accounts (**Auth > Register**) start `isActivated: false` and their company starts `status: 'PENDING'` - use **Moderation > Toggle User Activation** and **Admin > Update Company Status** (both Super Admin only) to unlock a test account before logging in as it.\n\nSee `docs/ARCHITECTURE.md`, `docs/GAP_ANALYSIS.md`, and `CLAUDE.md` in the repo root for the full design rationale behind these conventions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "role", "value": "", "type": "string" },
+    { "key": "apiKey", "value": "", "type": "string" },
+    { "key": "apiKeyId", "value": "", "type": "string" },
+    { "key": "companyId", "value": "1", "type": "string" },
+    { "key": "locationId", "value": "1", "type": "string" },
+    { "key": "mediaId", "value": "1", "type": "string" },
+    { "key": "chargePointId", "value": "1", "type": "string" },
+    { "key": "connectorId", "value": "1", "type": "string" },
+    { "key": "tariffId", "value": "1", "type": "string" },
+    { "key": "sessionId", "value": "1", "type": "string" },
+    { "key": "userId", "value": "1", "type": "string" },
+    { "key": "activationToken", "value": "", "type": "string" },
+    { "key": "operatorReferenceId", "value": "684C87AD2CF745756546345435435", "type": "string" },
+    { "key": "evseId", "value": "cd091bd0-ba47-463c-bc53-8e57000167e2", "type": "string" },
+    { "key": "externalConnectorId", "value": "GBEV0667A", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Register Company + Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Sample Charging Co\",\n  \"companyEmail\": \"{{$randomEmail}}\",\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"userEmail\": \"{{$randomEmail}}\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "description": "Self-service onboarding. Creates a Company (status: PENDING) and its first User (role: COMPANY_ADMIN, isActivated: false) in one transaction, and emails an activation link (fire-and-forget - fails silently if MAIL_HOST/MAIL_USER/MAIL_PASS aren't configured). No auth required. Uses `{{$randomEmail}}` (Postman's built-in dynamic variable) so this can be re-run repeatedly without colliding with User.email's unique constraint.\n\nNote: the response is `{ success, message }` only - it doesn't return the new company/user's ID, so this request is NOT wired into this collection's ID-chaining or Cleanup folder. Running it (including as part of a full Collection Run) leaves a real PENDING company + unactivated user in the database every time; find and delete it manually via Companies > Get All Companies + Cleanup > Delete Company if you don't want it to accumulate."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email?token={{activationToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-email"],
+              "query": [{ "key": "token", "value": "{{activationToken}}" }]
+            },
+            "description": "Activates a self-registered user (isActivated: true) using the token emailed at registration, or copied from the User row / AuditLog directly in dev. The token is archived (not nulled) after use, so it can't be replayed."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.success && body.token) {",
+                  "        pm.collectionVariables.set('token', body.token);",
+                  "        pm.collectionVariables.set('role', body.user.role);",
+                  "        if (body.user.companyId) pm.collectionVariables.set('companyId', body.user.companyId);",
+                  "        pm.collectionVariables.set('userId', body.user.id);",
+                  "        console.log('Saved token/role/companyId for', body.user.email);",
+                  "    }",
+                  "}",
+                  "pm.test('Login succeeded', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@evopen.co.uk\",\n  \"password\": \"Admin123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Default body logs in as the Super Admin seeded by `npx prisma db seed` (rotate this password in any real deployment). Swap the email/password to log in as any other activated user - most of this collection assumes a SUPER_ADMIN session so every folder is reachable; log in as a COMPANY_ADMIN to exercise the tenant-scoped/403 behavior described in each request. On success, the test script saves `token`, `role`, `companyId`, and `userId` as collection variables."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "Get All Companies (scoped)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/companies", "host": ["{{baseUrl}}"], "path": ["companies"] },
+            "description": "SUPER_ADMIN gets every company; COMPANY_ADMIN/STAFF get only their own company (single-item array)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Company (Super Admin only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('companyId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Company created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin-Created Operator Ltd\",\n  \"contactEmail\": \"ops@admincreated.example\",\n  \"operatorReferenceId\": \"OPREF-{{$randomInt}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/companies", "host": ["{{baseUrl}}"], "path": ["companies"] },
+            "description": "SUPER_ADMIN only. Creates a company directly with status: ACTIVE (bypassing the self-registration PENDING flow). Saves the new company's id into `companyId`, which every downstream folder (Tariffs, Locations, Charge Points, ...) in this collection then targets - this is what makes the collection runnable end-to-end on a completely empty database. `operatorReferenceId` uses `{{$randomInt}}` since it's unique-constrained."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Company (Super Admin only)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin-Created Operator Ltd (Renamed)\",\n  \"contactEmail\": \"ops2@admincreated.example\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/companies/{{companyId}}", "host": ["{{baseUrl}}"], "path": ["companies", "{{companyId}}"] },
+            "description": "Omits operatorReferenceId from the body on purpose - passing the same value twice is fine (it's still unique to this row), but there's no need to touch it here."
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Company Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sample Charging Co (Self-Updated)\",\n  \"contactEmail\": \"contact@samplecharging.example\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/companies/profile", "host": ["{{baseUrl}}"], "path": ["companies", "profile"] },
+            "description": "Self-service update of the CALLER's own company (via req.user.companyId, not the `companyId` variable). Requires role COMPANY_ADMIN or SUPER_ADMIN. Note: the default seeded Super Admin has no companyId at all, so this specific request will 403 (\"not linked to an operational company tenant\") when run with the default Login credentials - it's meant to be run while logged in as a COMPANY_ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tariffs",
+      "item": [
+        {
+          "name": "Get All Tariffs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/tariffs", "host": ["{{baseUrl}}"], "path": ["tariffs"] },
+            "description": "Requires role SUPER_ADMIN, COMPANY_ADMIN, or STAFF."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Tariff",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('tariffId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Tariff created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Standard AC Rate\",\n  \"pricePerKwh\": 0.35,\n  \"currency\": \"GBP\",\n  \"companyId\": {{companyId}}\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/tariffs", "host": ["{{baseUrl}}"], "path": ["tariffs"] },
+            "description": "Requires role SUPER_ADMIN or COMPANY_ADMIN. `companyId` in the body is only honored for SUPER_ADMIN; others are forced to their own company. Runs before Connectors in this collection so a real `tariffId` exists by the time Connectors > Create Connector references it."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tariff",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Standard AC Rate (Revised)\",\n  \"pricePerKwh\": 0.38\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/tariffs/{{tariffId}}", "host": ["{{baseUrl}}"], "path": ["tariffs", "{{tariffId}}"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Locations",
+      "item": [
+        {
+          "name": "Get All Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/locations?search=&status=",
+              "host": ["{{baseUrl}}"],
+              "path": ["locations"],
+              "query": [
+                { "key": "search", "value": "", "description": "matches name/postcode/city/locationUid/operatorReferenceId/company name" },
+                { "key": "status", "value": "", "description": "'approved' or 'pending' - omit for all" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('locationId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Location created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Riverside Car Park", "type": "text" },
+                { "key": "address", "value": "12 Riverside Way", "type": "text" },
+                { "key": "postcode", "value": "SW1A 1AA", "type": "text" },
+                { "key": "latitude", "value": "51.5014", "type": "text" },
+                { "key": "longitude", "value": "-0.1419", "type": "text" },
+                { "key": "amenities", "value": "WIFI,TOILETS,CAFE", "type": "text" },
+                { "key": "companyId", "value": "{{companyId}}", "type": "text", "description": "Only honored for SUPER_ADMIN; others are forced to their own company" },
+                { "key": "city", "value": "London", "type": "text" },
+                { "key": "state", "value": "Greater London", "type": "text" },
+                { "key": "countryCode", "value": "GB", "type": "text" },
+                { "key": "partyId", "value": "Ada", "type": "text" },
+                { "key": "countryISO", "value": "GBR", "type": "text" },
+                { "key": "parkingType", "value": "PARKING_LOT", "type": "text" },
+                { "key": "timeZone", "value": "Europe/London", "type": "text" },
+                { "key": "images", "type": "file", "src": [], "description": "Up to 5 image files (multer field name must be 'images')" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/locations", "host": ["{{baseUrl}}"], "path": ["locations"] },
+            "description": "multipart/form-data - Postman auto-sets the correct Content-Type boundary header, do not set it manually. Attach files to the 'images' field in the Postman UI if you want to test uploads (they can't be embedded in the collection JSON itself; the field works fine left empty).\n\nisApproved is NOT settable here: it's forced server-side to `role === 'SUPER_ADMIN'` - a non-Super-Admin's location starts unapproved and must go through Moderation."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Riverside Car Park (Renamed)", "type": "text" },
+                { "key": "chargingWhenClosed", "value": "true", "type": "text" },
+                { "key": "isApproved", "value": "true", "type": "text", "description": "Only honored if the caller is SUPER_ADMIN" },
+                { "key": "images", "type": "file", "src": [], "description": "Optional - appends new images, does not replace existing ones" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/locations/{{locationId}}", "host": ["{{baseUrl}}"], "path": ["locations", "{{locationId}}"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Charge Points",
+      "item": [
+        {
+          "name": "Get All Charge Points",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/charge-points", "host": ["{{baseUrl}}"], "path": ["charge-points"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Charge Point",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('chargePointId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Charge point created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hardwareId\": \"*Ada*ETESTEVSE-{{$randomInt}}\",\n  \"locationId\": {{locationId}},\n  \"status\": \"AVAILABLE\",\n  \"floorLevel\": \"Ground\",\n  \"evseUid\": \"test-evse-uid-{{$randomInt}}\",\n  \"physicalReference\": \"P-01\",\n  \"parkingRestrictions\": [\"EV_ONLY\"],\n  \"capabilities\": [\"REMOTE_START_STOP_CAPABLE\", \"RFID_READER\"],\n  \"evseLatitude\": 51.5014,\n  \"evseLongitude\": -0.1419\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/charge-points", "host": ["{{baseUrl}}"], "path": ["charge-points"] },
+            "description": "`locationId` must belong to the caller's own company unless SUPER_ADMIN. isApproved is forced to `role === 'SUPER_ADMIN'` server-side, same as locations. `hardwareId` uses `{{$randomInt}}` since it's globally unique-constrained."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Charge Point",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"floorLevel\": \"1st Floor\",\n  \"isApproved\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/charge-points/{{chargePointId}}", "host": ["{{baseUrl}}"], "path": ["charge-points", "{{chargePointId}}"] },
+            "description": "`isApproved` is only honored if the caller is SUPER_ADMIN. Deliberately does not touch `status`, since Sessions later in this collection expects the connector chain under this charge point to still be reachable in its default AVAILABLE state."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Connectors",
+      "item": [
+        {
+          "name": "Get All Connectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/connectors", "host": ["{{baseUrl}}"], "path": ["connectors"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Connector",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('connectorId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Connector created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargePointId\": {{chargePointId}},\n  \"connectorUid\": \"conn-test-001\",\n  \"standard\": \"IEC_62196_T2\",\n  \"format\": \"SOCKET\",\n  \"powerType\": \"AC_3_PHASE\",\n  \"maxPowerKw\": 22,\n  \"voltage\": 230,\n  \"amperage\": 32,\n  \"status\": \"AVAILABLE\",\n  \"tariffId\": {{tariffId}},\n  \"termsAndConditions\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/connectors", "host": ["{{baseUrl}}"], "path": ["connectors"] },
+            "description": "`chargePointId` must belong to the caller's own company unless SUPER_ADMIN. `tariffId` references the tariff created earlier in this collection run. `type` defaults from `powerType` if omitted (AC vs DC)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Connector",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxPowerKw\": 25,\n  \"termsAndConditions\": \"Standard terms apply.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/connectors/{{connectorId}}", "host": ["{{baseUrl}}"], "path": ["connectors", "{{connectorId}}"] },
+            "description": "Deliberately leaves `status` as AVAILABLE (the default from creation) - Sessions > Start Session later in this collection requires an AVAILABLE connector to succeed. Change `status` here if you want to test the 400 rejection path on Start Session instead."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "Get Live Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/sessions/live", "host": ["{{baseUrl}}"], "path": ["sessions", "live"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Transactions (Completed Sessions)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/sessions/transactions", "host": ["{{baseUrl}}"], "path": ["sessions", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('sessionId', pm.response.json().data.id);",
+                  "}",
+                  "pm.test('Session started', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"connectorId\": {{connectorId}}\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/sessions/start", "host": ["{{baseUrl}}"], "path": ["sessions", "start"] },
+            "description": "The connector must currently be AVAILABLE and belong to the caller's own company (unless SUPER_ADMIN). Sets the connector to OCCUPIED. Stands in for a real OCPP/hardware start-session webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Session",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kwhConsumed\": 12.5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/stop", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "stop"] },
+            "description": "kwhConsumed must be a number between 0 and 1000. totalCost = kwhConsumed * connector's tariff.pricePerKwh (0 if no tariff attached). Frees the connector back to AVAILABLE."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users (Self)",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/users/profile", "host": ["{{baseUrl}}"], "path": ["users", "profile"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Root Platform Administrator\",\n  \"email\": \"admin@evopen.co.uk\",\n  \"phoneNumber\": \"+44 7700 900123\",\n  \"avatarUrl\": \"\",\n  \"locationStr\": \"London, UK\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/profile", "host": ["{{baseUrl}}"], "path": ["users", "profile"] },
+            "description": "name and email are required. Note: changing email here does NOT re-trigger email verification. Defaults match the seeded Super Admin so this is safe to run with the default Login - it's a no-op update to that account's own existing values."
+          },
+          "response": []
+        },
+        {
+          "name": "Change My Password",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"REPLACE_WITH_CURRENT_PASSWORD\",\n  \"newPassword\": \"EvenMoreSecurePass456!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users/password", "host": ["{{baseUrl}}"], "path": ["users", "password"] },
+            "description": "Not run by default in a full Collection Run (would lock you out of the seeded Super Admin's known password) - fill in currentPassword and run manually if you want to test this."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Get Overview Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analytics/overview?filterCompanyId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics", "overview"],
+              "query": [{ "key": "filterCompanyId", "value": "", "description": "SUPER_ADMIN only - filter to one company; omit for global totals" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/metrics?filterCompanyId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "metrics"],
+              "query": [{ "key": "filterCompanyId", "value": "", "description": "SUPER_ADMIN only - filter to one company; omit for global totals" }]
+            },
+            "description": "Returns { success, role, summary, chartData, systemStats, companies } - note this does NOT follow the { success, data } convention. systemStats/companies are only populated for SUPER_ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit?search=&action=&entity=&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit"],
+              "query": [
+                { "key": "search", "value": "", "description": "matches details/ipAddress/user name/email" },
+                { "key": "action", "value": "", "description": "e.g. CREATE, UPDATE, DELETE, LOGIN (uppercased server-side)" },
+                { "key": "entity", "value": "", "description": "e.g. LOCATION, CHARGE_POINT, COMPANY, API_KEY (uppercased server-side)" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20", "description": "hard-capped at 100" }
+              ]
+            },
+            "description": "SUPER_ADMIN sees every company's audit trail; others see only entries from users in their own company. By the time this runs in a full Collection Run, it should show a rich trail from every create/update above."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Moderation (Super Admin)",
+      "item": [
+        {
+          "name": "Get Pending Submissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/moderation/submissions", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "submissions"] },
+            "description": "Lists every isApproved: false Location and ChargePoint platform-wide. Populated by non-Super-Admin creates - since this collection's default Login is the Super Admin, the Location/ChargePoint created earlier are already auto-approved and won't appear here unless you re-run those folders while logged in as a COMPANY_ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Moderate Location",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved\": true,\n  \"note\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/moderation/locations/{{locationId}}/moderate", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "locations", "{{locationId}}", "moderate"] },
+            "description": "Set approved: false and provide a note to reject with a reason instead."
+          },
+          "response": []
+        },
+        {
+          "name": "Moderate Charge Point",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved\": true,\n  \"note\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/moderation/charge-points/{{chargePointId}}/moderate", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "charge-points", "{{chargePointId}}", "moderate"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Maintenance Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/moderation/maintenance", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "maintenance"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Maintenance Settings",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"globalAlert\": false,\n  \"alertMessage\": \"Scheduled maintenance window: 02:00-03:00 UTC.\",\n  \"affectedServices\": {\n    \"locationsFeed\": false,\n    \"tariffsFeed\": false,\n    \"operatorPortal\": false,\n    \"developerKeys\": false\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/moderation/maintenance", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "maintenance"] },
+            "description": "Toggles the maintenance gates enforced by checkLocationsGate/checkTariffsGate/checkPortalGate. Body here deliberately leaves everything false/off - flipping locationsFeed or tariffsFeed to true will make GET /open-data/feed and /open-data/tariffs return 503 to EVERYONE, including this collection's own Open Data - Public folder, until flipped back."
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle User Activation",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activate\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/moderation/users/{{userId}}/activation", "host": ["{{baseUrl}}"], "path": ["admin", "moderation", "users", "{{userId}}", "activation"] },
+            "description": "Manual override to activate/deactivate a user, bypassing the email verification flow. Useful for activating a freshly self-registered test account (see Auth > Register) without needing SMTP configured - swap `userId` to that new user's id first."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin (Super Admin)",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Company Status",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/companies/{{companyId}}/status", "host": ["{{baseUrl}}"], "path": ["admin", "companies", "{{companyId}}", "status"] },
+            "description": "status must be ACTIVE or SUSPENDED. Setting ACTIVE cascades isActivated: true to that company's un-activated COMPANY_ADMIN users (useful right after Auth > Register). Setting SUSPENDED cascades status: SUSPENDED to every user in the company."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Status",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/status", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "status"] },
+            "description": "status must be ACTIVE, SUSPENDED, or DISABLED."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rate Limit Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/config/rate-limit", "host": ["{{baseUrl}}"], "path": ["admin", "config", "rate-limit"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Rate Limit Config",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feedRateLimitMax\": 100,\n  \"feedRateLimitWindow\": 300,\n  \"rateLimitingEnabled\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/config/rate-limit", "host": ["{{baseUrl}}"], "path": ["admin", "config", "rate-limit"] },
+            "description": "feedRateLimitWindow is in SECONDS. Immediately refreshes the in-memory rate limiter cache used by GET /open-data/feed - note this cache is per Node process, so it won't propagate across multiple backend instances."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Open Data - Public (no auth)",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Public Feed (Locations/EVSEs)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/open-data/feed?search=&companyId=&operator_reference_id=&page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "feed"],
+              "query": [
+                { "key": "search", "value": "" },
+                { "key": "companyId", "value": "" },
+                { "key": "operator_reference_id", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50", "description": "capped at 100" }
+              ]
+            },
+            "description": "Fully public, unauthenticated OCPI-style location/EVSE/connector feed. Always filtered to isApproved: true. Protected by the dynamic feed rate limiter (see Admin > Get/Update Rate Limit Config) - watch the RateLimit-* response headers."
+          },
+          "response": []
+        },
+        {
+          "name": "Public Tariffs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/open-data/tariffs?companyId=&page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "tariffs"],
+              "query": [
+                { "key": "companyId", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            },
+            "description": "Public, unauthenticated. Filtered to tariffs whose parent company.status is ACTIVE."
+          },
+          "response": []
+        },
+        {
+          "name": "Legacy Public Dataset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/dataset?companyId=&limit=",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "dataset"],
+              "query": [
+                { "key": "companyId", "value": "" },
+                { "key": "limit", "value": "" }
+              ]
+            },
+            "description": "Legacy/duplicate unauthenticated OCPI-style export, kept for backwards compatibility - prefer GET /open-data/feed for new integrations."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Open Data - Developer Keys",
+      "item": [
+        {
+          "name": "List My API Keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/open-data/keys", "host": ["{{baseUrl}}"], "path": ["open-data", "keys"] },
+            "description": "Returns the real key value (decrypted server-side from a reversible AES-256-GCM copy) for every key created after the encryptedKey field was added - a Super Admin or the owning company can copy it again anytime, not just once at creation. Keys created before that field existed return `key: null` (their raw value was never stored, only a one-way hash) - regenerate those to get a recoverable value."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate API Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.collectionVariables.set('apiKey', data.key);",
+                  "    pm.collectionVariables.set('apiKeyId', data.id);",
+                  "    console.log('Saved apiKey (shown once):', data.key);",
+                  "}",
+                  "pm.test('Key created', () => pm.response.code === 201);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Key\",\n  \"companyId\": {{companyId}},\n  \"isMaster\": false\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/keys", "host": ["{{baseUrl}}"], "path": ["open-data", "keys"] },
+            "description": "`companyId` and `isMaster` are only honored for SUPER_ADMIN callers (others are forced to their own company, isMaster: false). The raw key is returned here, and can also be recovered again later from `GET /open-data/keys` (see that request's description) - it isn't a one-time-only value. Test script auto-saves it into `apiKey`/`apiKeyId`."
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Master Sync Privilege (Super Admin only)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isMaster\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["open-data", "keys", "{{apiKeyId}}"] },
+            "description": "Only a SUPER_ADMIN may call this. Grants the key generated above the ability to sync ANY operator via POST /open-data/sync-operator (see Open Data - Partner Integration) - only grant this to a fully trusted upstream integrator in a real deployment. Runs by default so the Partner Integration folder's Sync Operator example works out of the box; call with `{\"isMaster\": false}` to revoke it again and observe the self-scoped-only behavior instead."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Open Data - Partner Integration (x-api-key)",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          { "key": "key", "value": "x-api-key", "type": "string" },
+          { "key": "value", "value": "{{apiKey}}", "type": "string" },
+          { "key": "in", "value": "header", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "Sync Operator (requires master key for cross-operator sync)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Location\",\n  \"message\": \"Success\",\n  \"meta\": { \"timestamp\": \"2026-07-14T11:30:38.786Z\" },\n  \"operator_reference_id\": \"{{operatorReferenceId}}\",\n  \"location\": [\n    {\n      \"country_code\": \"GB\",\n      \"party_id\": \"Ada\",\n      \"id\": \"{{operatorReferenceId}}\",\n      \"publish\": true,\n      \"name\": \"Adam Street 2\",\n      \"address\": \"7-10 Adam Street, The Strand, London, WC2N 6AA 2\",\n      \"city\": \"The Strand\",\n      \"postal_code\": \"WC2N\",\n      \"state\": \"London\",\n      \"country\": \"United Kingdom\",\n      \"coordinates\": { \"latitude\": \"51.5096622\", \"longitude\": \"-0.1219825\" },\n      \"parking_type\": \"ON_STREET\",\n      \"evses\": [\n        {\n          \"uid\": \"{{evseId}}\",\n          \"evse_id\": \"*Ada*EGBEV0667A12\",\n          \"status\": \"Available\",\n          \"capabilities\": [\"REMOTE_START_STOP_CAPABLE\"],\n          \"connectors\": [\n            {\n              \"id\": \"{{externalConnectorId}}6772\",\n              \"standard\": \"IEC_62196_T77\",\n              \"format\": \"Socket\",\n              \"power_type\": \"AC_3_PHASE\",\n              \"max_voltage\": 440,\n              \"max_amperage\": 32,\n              \"max_electric_power\": 21000,\n              \"tariff_ids\": [\"8EDFC2CF-7592-47EF-A4ED-AC7ED1D1CC1F\"],\n              \"terms_and_conditions\": \"\",\n              \"last_updated\": \"2026-07-16T07:13:18\"\n            }\n          ],\n          \"floor_level\": \"\",\n          \"coordinates\": { \"latitude\": \"51.5096622\", \"longitude\": \"-0.1219825\" },\n          \"physical_reference\": \"GBEV0667A\",\n          \"directions\": [],\n          \"parking_restrictions\": [],\n          \"images\": []\n        }\n      ],\n      \"directions\": [],\n      \"operator\": {\n        \"name\": \"MaanRishfa Ltd\",\n        \"email\": \"admin@maanrishfa.com\"\n      },\n      \"suboperator\": { \"name\": \"Abu Taleb\" },\n      \"owner\": { \"name\": \"MaanRishfa IT Solutions\" },\n      \"facilities\": [],\n      \"time_zone\": \"Europe/London\",\n      \"opening_times\": {\n        \"twentyfourseven\": false,\n        \"regular_hours\": [\n          { \"weekday\": 1, \"period_begin\": \"00:00\", \"period_end\": \"23:53\" }\n        ]\n      },\n      \"charging_when_closed\": false,\n      \"energy_mix\": {}\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/sync-operator", "host": ["{{baseUrl}}"], "path": ["open-data", "sync-operator"] },
+            "description": "Two authorization modes, gated by ApiKey.isMaster:\n- Regular key: only ever creates/updates data under the key's OWN company (req.partnerCompanyId). `operator_reference_id`/`operator.name` in the payload are ignored for company resolution (though the key's own company's display name/email CAN be updated from the payload's operator object).\n- Master key (the default `apiKey` from Open Data - Developer Keys has one granted): resolves the operator matching `operatorReferenceId`, or auto-creates it (status: ACTIVE) if it doesn't exist yet - this works correctly against either a fresh database (creates a new 'MaanRishfa Ltd' company) or this exact dev database (updates the existing one), which is why this example is safe to run anywhere.\n\nReplaces the target operator's location/EVSE/connector data entirely based on the payload (upsert by locationUid/name, hardwareId/evseUid, connectorUid/standard)."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest External Data (bulk, by numeric ID)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": [\n    {\n      \"id\": \"{{locationId}}\",\n      \"name\": \"Ingested Location\",\n      \"address\": \"1 Ingest Way\",\n      \"postal_code\": \"IG1 1ES\",\n      \"city\": \"Ingestville\",\n      \"state\": null,\n      \"country_code\": \"GB\",\n      \"country\": \"GBR\",\n      \"publish\": true,\n      \"coordinates\": { \"latitude\": \"51.51\", \"longitude\": \"-0.12\" },\n      \"evses\": [\n        {\n          \"evse_id\": \"*Ada*EINGESTEVSE001\",\n          \"uid\": \"ingest-evse-uid-001\",\n          \"status\": \"Available\",\n          \"capabilities\": [\"REMOTE_START_STOP_CAPABLE\"],\n          \"connectors\": [\n            {\n              \"id\": \"ingest-conn-001\",\n              \"standard\": \"IEC_62196_T2\",\n              \"format\": \"SOCKET\",\n              \"power_type\": \"AC_3_PHASE\",\n              \"max_voltage\": 230,\n              \"max_amperage\": 32,\n              \"max_electric_power\": 22000\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/ingest", "host": ["{{baseUrl}}"], "path": ["open-data", "ingest"] },
+            "description": "Upserts by numeric `id` (must resolve to a real/new Location primary key). Refuses (skips, reported in `skippedIds`) if that numeric ID already belongs to a different company than the calling key's own - always self-scoped, no master-key exception here (unlike sync-operator). By default this targets the `locationId` this collection already created and owns, so the update path succeeds."
+          },
+          "response": []
+        },
+        {
+          "name": "Patch External Location",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"publish\": true,\n  \"chargingWhenClosed\": false,\n  \"directions\": [{ \"text\": \"Enter via the north gate.\" }],\n  \"energyMix\": { \"is_green_energy\": true }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/external/locations/{{locationId}}", "host": ["{{baseUrl}}"], "path": ["open-data", "external", "locations", "{{locationId}}"] },
+            "description": "Only succeeds if this location belongs to the calling key's own company (req.partnerCompanyId) - checked regardless of master/regular key status. Unrecognized top-level fields are spread directly into the Prisma update, so field names must match the Location model's actual column names (e.g. `postcode`, not `postal_code`)."
+          },
+          "response": []
+        },
+        {
+          "name": "Patch External EVSE",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Available\",\n  \"floor_level\": \"Ground\",\n  \"capabilities\": [\"REMOTE_START_STOP_CAPABLE\", \"RFID_READER\"],\n  \"coordinates\": { \"latitude\": \"51.5096622\", \"longitude\": \"-0.1219825\" },\n  \"connectors\": [\n    {\n      \"id\": \"{{externalConnectorId}}\",\n      \"status\": \"AVAILABLE\",\n      \"max_electric_power\": 22000\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/open-data/external/locations/{{locationId}}/evses/{{evseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "external", "locations", "{{locationId}}", "evses", "{{evseId}}"]
+            },
+            "description": "`evseId` can be either the EVSE's hardwareId or its numeric database id - the default `{{evseId}}` value only exists on this dev database's example data (see Sync Operator above), so on a fresh database this will 404 unless you swap it for a real EVSE identifier first. Ownership is checked via the EVSE's parent location's company."
+          },
+          "response": []
+        },
+        {
+          "name": "Patch External Connector",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CHARGING\",\n  \"max_power_kw\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/open-data/external/evses/{{evseId}}/connectors/{{connectorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "external", "evses", "{{evseId}}", "connectors", "{{connectorId}}"]
+            },
+            "description": "`connectorId` here is the connector's numeric database id (the `evses/:evseId` segment is present in the path but the lookup is actually performed on the connector directly). Defaults to the `connectorId` this collection created and owns, so it succeeds provided this key's company matches (grant master privilege, or point `connectorId` at one of your own connectors)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Open Data - Internal Previews & Telemetry",
+      "item": [
+        {
+          "name": "Update Location Metadata (Portal)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"publish\": true,\n  \"publishAllowedTo\": [],\n  \"latitude\": 51.5096622,\n  \"longitude\": -0.1219825,\n  \"relatedLocations\": [],\n  \"parkingType\": \"ON_STREET\",\n  \"directions\": \"Enter via the north gate.\",\n  \"suboperatorName\": \"\",\n  \"suboperatorWebsite\": \"\",\n  \"suboperatorLogoUrl\": \"\",\n  \"chargingWhenClosed\": false,\n  \"energyMix\": { \"is_green_energy\": true },\n  \"amenities\": \"WIFI,TOILETS\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/location/{{locationId}}/metadata", "host": ["{{baseUrl}}"], "path": ["open-data", "location", "{{locationId}}", "metadata"] },
+            "description": "JWT-protected (not x-api-key). Lets an operator's own dashboard tune OCPI-facing metadata for a location it owns (or any location, if SUPER_ADMIN)."
+          },
+          "response": []
+        },
+        {
+          "name": "Traffic Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/open-data/admin/traffic-metrics?days=7&limit=50&operator_reference_id=",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "admin", "traffic-metrics"],
+              "query": [
+                { "key": "days", "value": "7" },
+                { "key": "limit", "value": "50", "description": "capped at 100" },
+                { "key": "operator_reference_id", "value": "", "description": "SUPER_ADMIN only filter" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Rate Limit Telemetry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/open-data/admin/rate-limit-telemetry", "host": ["{{baseUrl}}"], "path": ["open-data", "admin", "rate-limit-telemetry"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Dashboard Feed Preview (tenant-scoped)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/open-data/preview/feed?search=&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "preview", "feed"],
+              "query": [
+                { "key": "search", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "JWT-protected, tenant-scoped equivalent of the public feed - includes unapproved records for the caller's own company (or all, if SUPER_ADMIN)."
+          },
+          "response": []
+        },
+        {
+          "name": "Dashboard Tariffs Preview (tenant-scoped)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/open-data/preview/tariffs?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["open-data", "preview", "tariffs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cleanup (Delete Test Data)",
+      "description": "Deliberately isolated at the end of the collection so a full top-to-bottom Collection Run exercises every create/read/update flow (and everything that depends on those IDs) before anything gets torn down. Ordered to respect dependencies: connectors before charge points before locations, API key revocation before nothing (independent), company last (cascades everything under it anyway, so the earlier deletes here are mostly redundant with it - both are included for completeness/clarity).",
+      "item": [
+        {
+          "name": "Delete Location Image",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/locations/media/{{mediaId}}", "host": ["{{baseUrl}}"], "path": ["locations", "media", "{{mediaId}}"] },
+            "description": "`mediaId` defaults to a placeholder - set it to a real Media row's id (e.g. from Locations > Get All Locations' `images[].id`) if you uploaded any images earlier."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/open-data/keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["open-data", "keys", "{{apiKeyId}}"] },
+            "description": "Soft-revoke (sets isActive: false) - the key row and its audit history are preserved, but it will immediately fail x-api-key auth on every partner route."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Connector",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/connectors/{{connectorId}}", "host": ["{{baseUrl}}"], "path": ["connectors", "{{connectorId}}"] },
+            "description": "Deletes dependent Session rows first, then the connector."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Charge Point",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/charge-points/{{chargePointId}}", "host": ["{{baseUrl}}"], "path": ["charge-points", "{{chargePointId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Location",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/locations/{{locationId}}", "host": ["{{baseUrl}}"], "path": ["locations", "{{locationId}}"] },
+            "description": "Cascading delete of any remaining charge points/connectors/sessions/media under this location, and purges uploaded image files from disk."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Tariff",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/tariffs/{{tariffId}}", "host": ["{{baseUrl}}"], "path": ["tariffs", "{{tariffId}}"] },
+            "description": "Unlinks (sets tariffId: null on) any dependent connectors before deleting the tariff."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Company (Super Admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/companies/{{companyId}}", "host": ["{{baseUrl}}"], "path": ["companies", "{{companyId}}"] },
+            "description": "Cascading delete: media, sessions, connectors, charge points, locations, tariffs, API keys, users, then the company itself. No real FK constraints exist (relationMode: prisma), so this is all done manually server-side - irreversible. This alone would have cleaned up everything created by this collection run even without the requests above."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

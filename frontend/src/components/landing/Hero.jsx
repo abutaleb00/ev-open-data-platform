@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { ArrowRight, Terminal, Server, Globe, DollarSign, MapPin } from 'lucide-react';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+
 export default function Hero() {
     return (
         <section id="hero" className="relative overflow-hidden pt-20 pb-24 md:pt-28 md:pb-36 bg-gradient-to-b from-white via-slate-50/30 to-[#F8FAFC]">
@@ -32,12 +34,12 @@ export default function Hero() {
                             <ArrowRight size={16} />
                         </Link>
                         
-                        <a href="https://evopen-api.maanrishfaxyz.xyz/api/v1/open-data/feed" target="_blank" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
+                        <a href={`${API_BASE_URL}/open-data/feed`} target="_blank" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
                             <MapPin size={16} className="text-slate-400" />
                             <span>Locations Feed</span>
                         </a>
 
-                        <a href="https://evopen-api.maanrishfaxyz.xyz/api/v1/open-data/tariffs" target="_blank" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
+                        <a href={`${API_BASE_URL}/open-data/tariffs`} target="_blank" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
                             <DollarSign size={16} className="text-slate-400" />
                             <span>Tariffs Feed</span>
                         </a>

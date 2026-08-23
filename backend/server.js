@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
 
 // --- SECURITY MODULE IMPORTS ---
 const helmet = require('helmet');
@@ -102,19 +101,6 @@ app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/open-data', openDataRoutes);
 app.use('/api/v1/admin', adminRoutes);
-
-// Database connection test route using STANDARD Prisma Client
-const prisma = new PrismaClient();
-
-app.get('/api/v1/charge-points-test', async (req, res) => {
-    try {
-        const chargePoints = await prisma.chargePoint.findMany();
-        res.json({ success: true, data: chargePoints });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "Database connection failed." });
-    }
-});
 
 // Fallback Route Handler for unmapped, rogue API requests
 app.use((req, res) => {

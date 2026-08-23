@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import {
-    Key, Eye, EyeOff, Copy, CheckCircle2, Plus, RefreshCw,
-    Globe, ShieldAlert, Building2, Loader2, ClipboardCheck
+    Key, Copy, CheckCircle2, Plus, RefreshCw, Eye, EyeOff,
+    Globe, ShieldAlert, Building2, Loader2, ClipboardCheck, ShieldCheck
 } from 'lucide-react';
 
 export default function ApiKeysPage() {
@@ -16,8 +16,10 @@ export default function ApiKeysPage() {
     const [submitting, setSubmitting] = useState(false);
     const [keyName, setKeyName] = useState('');
     const [targetCompanyId, setTargetCompanyId] = useState('');
-    const [revealedKeys, setRevealedKeys] = useState({});
+    const [grantMaster, setGrantMaster] = useState(false);
+    const [togglingKeyId, setTogglingKeyId] = useState(null);
     const [copiedKeyId, setCopiedKeyId] = useState(null);
+    const [revealedKeys, setRevealedKeys] = useState({});
     const [statusFeedback, setStatusFeedback] = useState({ show: false, type: 'success', message: '' });
 
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -72,13 +74,15 @@ export default function ApiKeysPage() {
             const response = await api.post('/open-data/keys', {
                 name: keyName.trim(),
                 // Send the selected ID for Super Admins, otherwise let backend drop back to auth injection token parameters
-                companyId: isSuperAdmin ? targetCompanyId : undefined
+                companyId: isSuperAdmin ? targetCompanyId : undefined,
+                isMaster: isSuperAdmin ? grantMaster : undefined
             });
 
             if (response.data.success) {
                 setKeyName('');
                 setTargetCompanyId('');
-                setStatusFeedback({ show: true, type: 'success', message: 'New deployment API credential token provisioned successfully.' });
+                setGrantMaster(false);
+                setStatusFeedback({ show: true, type: 'success', message: 'New deployment API credential token provisioned successfully. You can copy it anytime from the list on the right.' });
                 fetchKeys();
             }
         } catch (err) {
@@ -92,14 +96,31 @@ export default function ApiKeysPage() {
         }
     };
 
-    const toggleKeyVisibility = (id) => {
-        setRevealedKeys(prev => ({ ...prev, [id]: !prev[id] }));
-    };
-
     const copyToClipboard = (id, val) => {
+        if (!val) return;
         navigator.clipboard.writeText(val);
         setCopiedKeyId(id);
         setTimeout(() => setCopiedKeyId(null), 2000);
+    };
+
+    const toggleReveal = (id) => {
+        setRevealedKeys(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const toggleMaster = async (key) => {
+        setTogglingKeyId(key.id);
+        try {
+            await api.patch(`/open-data/keys/${key.id}`, { isMaster: !key.isMaster });
+            fetchKeys();
+        } catch (err) {
+            setStatusFeedback({
+                show: true,
+                type: 'error',
+                message: err.response?.data?.message || "Failed to update master-key privilege."
+            });
+        } finally {
+            setTogglingKeyId(null);
+        }
     };
 
     if (loading) {
@@ -172,6 +193,21 @@ export default function ApiKeysPage() {
                             </div>
                         )}
 
+                        {isSuperAdmin && (
+                            <label className="flex items-start space-x-2 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={grantMaster}
+                                    onChange={(e) => setGrantMaster(e.target.checked)}
+                                    className="mt-0.5"
+                                />
+                                <span>
+                                    <span className="block uppercase tracking-wider text-slate-700">Master / Aggregator Key</span>
+                                    Allows this key to sync data for <span className="font-black">any</span> operator by <code>operator_reference_id</code>, creating operators that do not exist yet. Only grant this to a trusted upstream integrator - regular keys are confined to their own company.
+                                </span>
+                            </label>
+                        )}
+
                         <button
                             type="submit"
                             disabled={submitting}
@@ -199,46 +235,72 @@ export default function ApiKeysPage() {
                                 <p className="text-[11px] max-w-xs mx-auto font-medium">Issue an access key block to map connections.</p>
                             </div>
                         ) : (
-                            keys.map((k) => (
-                                <div key={k.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-colors">
-                                    <div className="space-y-1.5 flex-1">
-                                        <div className="flex items-center space-x-2">
-                                            <p className="text-xs font-black text-slate-900">{k.name}</p>
-                                            {isSuperAdmin && k.company?.name && (
-                                                <span className="inline-flex items-center text-[9px] font-black uppercase bg-slate-100 border text-slate-500 rounded px-1.5 py-0.5">
-                                                    <Building2 size={9} className="mr-1 text-indigo-500" /> {k.company.name}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200/60 w-fit">
-                                            <span>{revealedKeys[k.id] ? k.key : 'ev_live_••••••••••••••••••••••••••••••••'}</span>
-                                        </div>
-                                    </div>
+                            keys.map((k) => {
+                                const isRecoverable = !!k.key;
+                                const isRevealed = !!revealedKeys[k.id];
+                                return (
+                                    <div key={k.id} className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 transition-colors">
+                                        <div className="space-y-1.5 flex-1 min-w-0">
+                                            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                                <p className="text-xs font-black text-slate-900">{k.name}</p>
+                                                {isSuperAdmin && k.company?.name && (
+                                                    <span className="inline-flex items-center text-[9px] font-black uppercase bg-slate-100 border text-slate-500 rounded px-1.5 py-0.5">
+                                                        <Building2 size={9} className="mr-1 text-indigo-500" /> {k.company.name}
+                                                    </span>
+                                                )}
+                                                {k.isMaster && (
+                                                    <span className="inline-flex items-center text-[9px] font-black uppercase bg-indigo-50 border border-indigo-200 text-indigo-700 rounded px-1.5 py-0.5">
+                                                        <ShieldCheck size={9} className="mr-1" /> Master
+                                                    </span>
+                                                )}
+                                                {!k.isActive && (
+                                                    <span className="inline-flex items-center text-[9px] font-black uppercase bg-rose-50 border border-rose-200 text-rose-700 rounded px-1.5 py-0.5">
+                                                        Revoked
+                                                    </span>
+                                                )}
+                                            </div>
 
-                                    {/* Actions Switch Row */}
-                                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto">
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleKeyVisibility(k.id)}
-                                            className="p-2 border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
-                                            title={revealedKeys[k.id] ? "Mask token sequence" : "Reveal cleartext secret"}
-                                        >
-                                            {revealedKeys[k.id] ? <EyeOff size={14} /> : <Eye size={14} />}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(k.id, k.key)}
-                                            className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all flex items-center space-x-1 min-w-[75px] justify-center text-xs font-black uppercase tracking-wider cursor-pointer shadow-xs active:scale-95"
-                                        >
-                                            {copiedKeyId === k.id ? (
-                                                <> <ClipboardCheck size={12} className="text-emerald-400" /> <span>Copied</span> </>
+                                            {isRecoverable ? (
+                                                <div className="flex items-center space-x-2 font-mono text-xs text-slate-700 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200/60 w-fit max-w-full">
+                                                    <span className="truncate max-w-[220px] sm:max-w-xs">
+                                                        {isRevealed ? k.key : 'ev_live_••••••••••••••••••••••••••••••••'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleReveal(k.id)}
+                                                        className="p-1 text-slate-400 hover:text-slate-900 shrink-0 cursor-pointer"
+                                                        title={isRevealed ? 'Hide key' : 'Reveal key'}
+                                                    >
+                                                        {isRevealed ? <EyeOff size={13} /> : <Eye size={13} />}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => copyToClipboard(k.id, k.key)}
+                                                        className="p-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg shrink-0 cursor-pointer"
+                                                        title="Copy key"
+                                                    >
+                                                        {copiedKeyId === k.id ? <ClipboardCheck size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                                    </button>
+                                                </div>
                                             ) : (
-                                                <> <Copy size={12} /> <span>Copy</span> </>
+                                                <p className="text-[10px] text-amber-600 font-bold">
+                                                    Value not recoverable (created before copy-anytime support) - revoke and regenerate to get a copyable key.
+                                                </p>
                                             )}
-                                        </button>
+                                        </div>
+                                        {isSuperAdmin && (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleMaster(k)}
+                                                disabled={togglingKeyId === k.id}
+                                                className={`text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-colors disabled:opacity-50 cursor-pointer shrink-0 ${k.isMaster ? 'bg-rose-50 text-rose-700 hover:bg-rose-100' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                                            >
+                                                {togglingKeyId === k.id ? '...' : (k.isMaster ? 'Revoke Master' : 'Grant Master')}
+                                            </button>
+                                        )}
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -263,7 +325,7 @@ export default function ApiKeysPage() {
                         <button
                             type="button"
                             onClick={() => setStatusFeedback({ ...statusFeedback, show: false })}
-                            className={`w-full py-2.5 text-xs font-black uppercase tracking-wider rounded-xl text-white ${statusFeedback.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                            className={`w-full py-2.5 text-xs font-black uppercase tracking-wider rounded-xl text-white cursor-pointer ${statusFeedback.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
                         >
                             Dismiss Notifier
                         </button>

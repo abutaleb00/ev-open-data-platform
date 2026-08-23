@@ -6,8 +6,10 @@ async function main() {
     console.log('🌱 Initializing master database seeding routine...');
 
     // 1. Define Super Admin profile configuration metrics
-    const adminEmail = 'admin@evopen.co.uk';
-    const rawPassword = 'Admin123!'; // Replace this with your secure key management password string
+    // Override via SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD in production - the fallbacks
+    // below are for local development only and must not be relied on post-deploy.
+    const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@evopen.co.uk';
+    const rawPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin123!';
 
     // 2. Prevent duplicate entries on consecutive seed executions
     const existingUser = await prisma.user.findUnique({

@@ -141,7 +141,8 @@ exports.createChargePoint = async (req, res) => {
                 directions: typeof directions === 'object' ? JSON.stringify(directions) : directions || null,
                 evseLatitude: evseLatitude ? parseFloat(evseLatitude) : null,
                 evseLongitude: evseLongitude ? parseFloat(evseLongitude) : null,
-                isApproved: true
+                // See locationController.createLocation for the moderation rationale.
+                isApproved: role === 'SUPER_ADMIN'
             }
         });
 
@@ -194,7 +195,8 @@ exports.updateChargePoint = async (req, res) => {
             ...(evseUid !== undefined && { evseUid }),
             ...(locationId && { locationId: parseInt(locationId, 10) }),
             ...(status && { status }),
-            ...(isApproved !== undefined && { isApproved: Boolean(isApproved) }),
+            // Moderation approval is a Super Admin-only decision - see createChargePoint.
+            ...(isApproved !== undefined && role === 'SUPER_ADMIN' && { isApproved: Boolean(isApproved) }),
             ...(floorLevel !== undefined && { floorLevel }),
             ...(physicalReference !== undefined && { physicalReference }),
             ...(parkingRestrictions !== undefined && { parkingRestrictions: Array.isArray(parkingRestrictions) ? parkingRestrictions.join(',') : parkingRestrictions }),

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import api from '@/lib/axios';
 import {
     Building2, User, Mail, Lock, Phone, Palette, Eye, EyeOff,
     ShieldCheck, AlertCircle, ArrowRight, RefreshCw, CheckCircle2, ChevronRight
@@ -33,8 +33,7 @@ export default function CorporateRegisterPage() {
         setSuccessMsg('');
 
         try {
-            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'https://evopen-api.maanrishfaxyz.xyz/api/v1'}/auth/register`;
-            const response = await axios.post(apiUrl, formData);
+            const response = await api.post('/auth/register', formData);
 
             if (response.data.success) {
                 setSuccessMsg(response.data.message || 'Self-registration completed successfully.');

@@ -7,13 +7,18 @@ const nodemailer = require('nodemailer');
 
 // Helper Function: Construct NodeMailer Production SSL Transport & Dispatch Branded HTML Template
 const sendVerificationEmail = async (targetEmail, firstName, companyName, activationLink) => {
+    if (!process.env.MAIL_HOST || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+        console.warn("MAIL_HOST/MAIL_USER/MAIL_PASS are not configured - skipping activation email dispatch.");
+        return;
+    }
+
     const transporter = nodemailer.createTransport({
-        host: process.env.MAIL_HOST || "mail.maanrishfaxyz.xyz",
+        host: process.env.MAIL_HOST,
         port: parseInt(process.env.MAIL_PORT || '465'),
         secure: true, // true for port 465 SSL connections
         auth: {
-            user: process.env.MAIL_USER || "admin@maanrishfaxyz.xyz",
-            pass: process.env.MAIL_PASS || "MaanRishfa@123",
+            user: process.env.MAIL_USER,
+            pass: process.env.MAIL_PASS,
         },
         tls: {
             rejectUnauthorized: false
@@ -63,7 +68,7 @@ const sendVerificationEmail = async (targetEmail, firstName, companyName, activa
                 <p style="margin-bottom: 0;">Best regards,<br><span class="highlight">Platform Infrastructure Team</span></p>
             </div>
             <div class="footer">
-                <p>This automated route was triggered by a self-registration request. If you did not initiate this command, please safely ignore this communication or contact <a href="mailto:admin@maanrishfaxyz.xyz">Security Operations</a>.</p>
+                <p>This automated route was triggered by a self-registration request. If you did not initiate this command, please safely ignore this communication or contact <a href="mailto:${process.env.MAIL_USER}">Security Operations</a>.</p>
             </div>
         </div>
     </body>
@@ -71,7 +76,7 @@ const sendVerificationEmail = async (targetEmail, firstName, companyName, activa
     `;
 
     await transporter.sendMail({
-        from: process.env.SYSTEM_EMAIL_FROM || '"EV Open Data Platform" <admin@maanrishfaxyz.xyz>',
+        from: process.env.SYSTEM_EMAIL_FROM || `"EV Open Data Platform" <${process.env.MAIL_USER}>`,
         to: targetEmail,
         subject: `[ACTION REQUIRED] Activate your EV Operator Network - ${companyName}`,
         html: htmlTemplate,
@@ -145,7 +150,7 @@ exports.registerCompanyAndAdmin = async (req, res) => {
             return { company, user };
         });
 
-        const frontendBaseUrl = process.env.FRONTEND_URL || 'https://evopen.maanrishfaxyz.xyz';
+        const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const activationLink = `${frontendBaseUrl}/verify-email?token=${activationToken}`;
 
         sendVerificationEmail(userEmail, firstName, companyName, activationLink).catch(err => {

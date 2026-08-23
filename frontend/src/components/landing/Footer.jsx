@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { Zap, Mail, MapPin, Globe, Terminal, FileText, CheckCircle2, Map } from 'lucide-react';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+
 export default function Footer() {
     return (
         <footer className="relative bg-slate-950 text-slate-400 border-t border-slate-900 pt-20 pb-10 overflow-hidden select-none">
@@ -43,13 +45,13 @@ export default function Footer() {
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
                                 <li>
-                                    <a href="https://evopen-api.prosfata.space/api/v1/open-data/feed" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
+                                    <a href={`${API_BASE_URL}/open-data/feed`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#FFAF00] transition-colors" />
                                         Locations JSON Feed
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="https://evopen-api.prosfata.space/api/v1/open-data/tariffs" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
+                                    <a href={`${API_BASE_URL}/open-data/tariffs`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center group">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#73CB44] transition-colors" />
                                         Tariffs JSON Feed
                                     </a>

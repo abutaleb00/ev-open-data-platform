@@ -8,7 +8,15 @@ const getClientIp = (req) => {
 // 1. READ ALL: Return company registry enriched with operator logo, website, and owner metadata
 exports.getAllCompanies = async (req, res) => {
     try {
+        const { role, companyId } = req.user;
+        const isSuperAdmin = role === 'SUPER_ADMIN';
+
+        // Non-super-admins may only ever see their own company record - the platform's
+        // full tenant list must never be exposed to a regular COMPANY_ADMIN/STAFF user.
+        const whereClause = isSuperAdmin ? {} : { id: parseInt(companyId, 10) };
+
         const companies = await prisma.company.findMany({
+            where: whereClause,
             include: {
                 _count: {
                     select: { users: true, locations: true }

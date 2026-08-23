@@ -68,11 +68,19 @@ exports.getTransactions = async (req, res) => {
 exports.startSession = async (req, res) => {
     try {
         const { connectorId } = req.body;
+        const { role, companyId: userCompanyId } = req.user;
 
         // Verify connector exists and is available
-        const connector = await prisma.connector.findUnique({ where: { id: parseInt(connectorId) } });
+        const connector = await prisma.connector.findUnique({
+            where: { id: parseInt(connectorId) },
+            include: { chargePoint: { include: { location: true } } }
+        });
         if (!connector || connector.status !== 'AVAILABLE') {
             return res.status(400).json({ success: false, message: "Connector is not available" });
+        }
+
+        if (role !== 'SUPER_ADMIN' && connector.chargePoint.location.companyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Connector belongs to a different network operator profile." });
         }
 
         // Start session and update connector status
@@ -93,20 +101,32 @@ exports.stopSession = async (req, res) => {
     try {
         const { id } = req.params;
         const { kwhConsumed } = req.body; // Usually sent by the hardware metric hook
+        const { role, companyId: userCompanyId } = req.user;
 
         const session = await prisma.session.findUnique({
             where: { id: parseInt(id) },
-            include: { connector: { include: { tariff: true } } }
+            include: { connector: { include: { tariff: true, chargePoint: { include: { location: true } } } } }
         });
 
         if (!session || session.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, message: "Valid active session not found" });
         }
 
+        if (role !== 'SUPER_ADMIN' && session.connector.chargePoint.location.companyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Session belongs to a different network operator profile." });
+        }
+
+        // Sanity-bound the hardware-reported reading - a single session realistically
+        // cannot exceed a few hundred kWh even on the fastest DC chargers.
+        const parsedKwh = parseFloat(kwhConsumed);
+        if (isNaN(parsedKwh) || parsedKwh < 0 || parsedKwh > 1000) {
+            return res.status(400).json({ success: false, message: "kwhConsumed must be a number between 0 and 1000." });
+        }
+
         // Calculate total cost
         let totalCost = 0;
         if (session.connector.tariff) {
-            totalCost = parseFloat(kwhConsumed) * session.connector.tariff.pricePerKwh;
+            totalCost = parsedKwh * session.connector.tariff.pricePerKwh;
         }
 
         // Complete the session and free up the connector
@@ -116,7 +136,7 @@ exports.stopSession = async (req, res) => {
                 data: {
                     status: 'COMPLETED',
                     endTime: new Date(),
-                    kwhConsumed: parseFloat(kwhConsumed),
+                    kwhConsumed: parsedKwh,
                     totalCost: totalCost
                 }
             }),

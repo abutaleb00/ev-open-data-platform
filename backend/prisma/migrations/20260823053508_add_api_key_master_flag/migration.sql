@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `ApiKey` ADD COLUMN `isMaster` BOOLEAN NOT NULL DEFAULT false;

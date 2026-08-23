@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { hashApiKey } = require('../utils/apiKeyHash');
 
 /**
  * PROTECT: Verifies the JWT, attaches the user + company context,
@@ -116,9 +117,9 @@ exports.verifyPartnerApiKey = async (req, res, next) => {
             });
         }
 
-        // Search database for the provided key and verify its tenant status
+        // Search database for the provided key (by its hash) and verify its tenant status
         const keyRecord = await prisma.apiKey.findUnique({
-            where: { key: apiKey },
+            where: { key: hashApiKey(apiKey) },
             include: { company: true }
         });
 
@@ -139,6 +140,7 @@ exports.verifyPartnerApiKey = async (req, res, next) => {
 
         // Attach company context to the request for the ingestion controller
         req.partnerCompanyId = keyRecord.companyId;
+        req.isMasterKey = keyRecord.isMaster;
         next();
     } catch (error) {
         return res.status(500).json({

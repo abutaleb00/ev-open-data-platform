@@ -5,17 +5,30 @@ const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
 };
 
-// HELPER: Generates fallback operator reference ID if missing
+// HELPER: Generates a fallback operator reference ID if the payload doesn't supply one
 const generateOperatorRef = (name) => {
     if (!name) return 'CEV';
     return name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'CEV';
 };
 
 // MAIN SYNC OPERATOR CONTROLLER
+//
+// Two authorization modes, distinguished by ApiKey.isMaster (see authMiddleware.
+// verifyPartnerApiKey, which sets req.isMasterKey):
+//   - Regular keys (req.isMasterKey === false): this endpoint only ever creates/
+//     updates data under the calling key's own company (req.partnerCompanyId). It
+//     never searches for or mutates a different tenant by name/operatorReferenceId.
+//   - Master/aggregator keys (req.isMasterKey === true, SUPER_ADMIN-granted only):
+//     may resolve/auto-create ANY operator by operator_reference_id or name, exactly
+//     like the original integration contract this endpoint was built for (a single
+//     upstream aggregator pushing updates for many downstream operators it manages).
+// In both modes, everything after company resolution (locations/EVSEs/connectors)
+// is scoped strictly to the resolved company.id.
 exports.syncOperatorData = async (req, res) => {
     try {
         const payload = req.body;
         const clientIp = getClientIp(req);
+        const isMasterKey = req.isMasterKey === true;
 
         if (!payload || typeof payload !== 'object') {
             return res.status(400).json({
@@ -24,9 +37,6 @@ exports.syncOperatorData = async (req, res) => {
             });
         }
 
-        // ======================================================
-        // STEP 1: DYNAMIC OPERATOR METADATA EXTRACTION
-        // ======================================================
         const locationsToSync = Array.isArray(payload.location)
             ? payload.location
             : (Array.isArray(payload.locations) ? payload.locations : []);
@@ -39,71 +49,129 @@ exports.syncOperatorData = async (req, res) => {
         }
 
         const embeddedOperator = payload.operator || locationsToSync[0]?.operator || {};
-        const operatorName = embeddedOperator.name || payload.name || "MaanRishfa Ltd";
-        const operatorRefId = payload.operator_reference_id || embeddedOperator.operator_reference_id || generateOperatorRef(operatorName);
+        let company;
 
-        // Priority order: payload.operator.email -> payload.email -> fallback email
-        const contactEmail = embeddedOperator.email || payload.email || `contact@${operatorRefId.slice(0, 8).toLowerCase()}.com`;
+        if (isMasterKey) {
+            // Resolve (or auto-provision) the target operator by operator_reference_id/name.
+            const operatorName = embeddedOperator.name || payload.name || null;
+            const operatorRefId = payload.operator_reference_id || embeddedOperator.operator_reference_id || (operatorName ? generateOperatorRef(operatorName) : null);
+            const contactEmail = embeddedOperator.email || payload.email || (operatorRefId ? `contact@${operatorRefId.slice(0, 8).toLowerCase()}.com` : null);
 
-        // ======================================================
-        // STEP 2: FIND OR AUTO-CREATE MISSING OPERATOR (COMPANY)
-        // ======================================================
-        let company = await prisma.company.findFirst({
-            where: {
-                OR: [
-                    { operatorReferenceId: operatorRefId },
-                    { name: operatorName }
-                ]
+            if (!operatorRefId && !operatorName) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Validation Error: A master-key sync requires 'operator_reference_id' or an 'operator.name' to identify the target operator."
+                });
             }
-        });
 
-        if (!company) {
-            // Auto-provision missing Operator Company using payload metadata
-            company = await prisma.company.create({
-                data: {
-                    name: operatorName,
-                    operatorReferenceId: operatorRefId,
-                    contactEmail: contactEmail,
-                    status: 'APPROVED' // Valid schema field (replacing isApproved)
+            company = await prisma.company.findFirst({
+                where: {
+                    OR: [
+                        ...(operatorRefId ? [{ operatorReferenceId: operatorRefId }] : []),
+                        ...(operatorName ? [{ name: operatorName }] : [])
+                    ]
                 }
             });
 
-            await prisma.auditLog.create({
-                data: {
-                    action: 'CREATE',
-                    entity: 'COMPANY',
-                    entityId: company.id,
-                    details: `Auto-provisioned missing Operator Company "${company.name}" (Ref: ${operatorRefId}) via partner sync API.`,
-                    ipAddress: clientIp
+            if (!company) {
+                company = await prisma.company.create({
+                    data: {
+                        name: operatorName || operatorRefId,
+                        operatorReferenceId: operatorRefId,
+                        contactEmail: contactEmail || `contact@${(operatorRefId || 'operator').toLowerCase()}.com`,
+                        status: 'ACTIVE'
+                    }
+                });
+
+                await prisma.auditLog.create({
+                    data: {
+                        action: 'CREATE',
+                        entity: 'COMPANY',
+                        entityId: company.id,
+                        details: `Auto-provisioned operator company "${company.name}" (Ref: ${operatorRefId}) via master-key partner sync.`,
+                        ipAddress: clientIp
+                    }
+                });
+            } else {
+                if (company.status === 'SUSPENDED') {
+                    return res.status(403).json({
+                        success: false,
+                        message: `Forbidden: Operator "${company.name}" is currently suspended and cannot be synced.`
+                    });
                 }
-            });
+
+                const updateData = {};
+                if (operatorName && operatorName !== company.name) updateData.name = operatorName;
+                if (contactEmail && contactEmail !== company.contactEmail) updateData.contactEmail = contactEmail;
+                if (operatorRefId && !company.operatorReferenceId) updateData.operatorReferenceId = operatorRefId;
+
+                if (Object.keys(updateData).length > 0) {
+                    company = await prisma.company.update({ where: { id: company.id }, data: updateData });
+
+                    await prisma.auditLog.create({
+                        data: {
+                            action: 'UPDATE',
+                            entity: 'COMPANY',
+                            entityId: company.id,
+                            details: `Master-key partner sync updated operator company "${company.name}" metadata.`,
+                            ipAddress: clientIp
+                        }
+                    });
+                }
+            }
         } else {
-            // Update existing company reference details if changed
-            company = await prisma.company.update({
-                where: { id: company.id },
-                data: {
-                    name: operatorName,
-                    contactEmail: contactEmail,
-                    ...(operatorRefId && { operatorReferenceId: operatorRefId })
-                }
-            });
+            // Regular key: strictly confined to its own company, ignoring any
+            // operator_reference_id/name in the payload for resolution purposes.
+            company = await prisma.company.findUnique({ where: { id: req.partnerCompanyId } });
+
+            if (!company) {
+                return res.status(404).json({
+                    success: false,
+                    message: "The company associated with this API key could not be found."
+                });
+            }
+
+            const newName = embeddedOperator.name || payload.name;
+            const newEmail = embeddedOperator.email || payload.email;
+
+            if (newName || newEmail) {
+                company = await prisma.company.update({
+                    where: { id: company.id },
+                    data: {
+                        ...(newName && { name: newName }),
+                        ...(newEmail && { contactEmail: newEmail })
+                    }
+                });
+
+                await prisma.auditLog.create({
+                    data: {
+                        action: 'UPDATE',
+                        entity: 'COMPANY',
+                        entityId: company.id,
+                        details: `Partner sync updated operator company "${company.name}" metadata.`,
+                        ipAddress: clientIp
+                    }
+                });
+            }
         }
 
         // ======================================================
-        // STEP 3: RECURSIVE SYNC FOR LOCATIONS, EVSEs, CONNECTORS
+        // RECURSIVE SYNC FOR LOCATIONS, EVSEs, CONNECTORS
+        // (all scoped to this company - see note above)
         // ======================================================
         const locationsSynced = [];
 
         for (const locPayload of locationsToSync) {
-            const locUid = locPayload.id || `loc_${Date.now()}`;
+            const locUid = locPayload.id || `loc_${company.id}_${locationsSynced.length}`;
             const lat = locPayload.coordinates?.latitude ? parseFloat(locPayload.coordinates.latitude) : 0.0;
             const lng = locPayload.coordinates?.longitude ? parseFloat(locPayload.coordinates.longitude) : 0.0;
 
             let location = await prisma.location.findFirst({
                 where: {
+                    companyId: company.id,
                     OR: [
                         { locationUid: locUid },
-                        { AND: [{ name: locPayload.name || '' }, { companyId: company.id }] }
+                        { name: locPayload.name || '' }
                     ]
                 }
             });
@@ -146,14 +214,18 @@ exports.syncOperatorData = async (req, res) => {
             const evsesToSync = Array.isArray(locPayload.evses) ? locPayload.evses : [];
 
             for (const evsePayload of evsesToSync) {
-                const hardwareId = evsePayload.evse_id || evsePayload.uid || `evse_${Date.now()}`;
+                const hardwareId = evsePayload.evse_id || evsePayload.uid || `evse_${location.id}_${evsesToSync.indexOf(evsePayload)}`;
 
+                // hardwareId is unique platform-wide, so scope the lookup to this
+                // company's own locations to prevent a collision from reassigning
+                // a device that belongs to a different tenant.
                 let chargePoint = await prisma.chargePoint.findFirst({
                     where: {
                         OR: [
                             { hardwareId: hardwareId },
                             { evseUid: evsePayload.uid || hardwareId }
-                        ]
+                        ],
+                        location: { companyId: company.id }
                     }
                 });
 
@@ -176,6 +248,12 @@ exports.syncOperatorData = async (req, res) => {
                         data: cpData
                     });
                 } else {
+                    // hardwareId must be globally unique per the schema - if a device
+                    // with this ID already exists under a different tenant, skip it
+                    // rather than letting create() throw a unique-constraint error.
+                    const collision = await prisma.chargePoint.findUnique({ where: { hardwareId } });
+                    if (collision) continue;
+
                     chargePoint = await prisma.chargePoint.create({
                         data: cpData
                     });
@@ -185,16 +263,19 @@ exports.syncOperatorData = async (req, res) => {
                 const connectorsToSync = Array.isArray(evsePayload.connectors) ? evsePayload.connectors : [];
 
                 for (const connPayload of connectorsToSync) {
-                    const connUid = connPayload.id || `conn_${Date.now()}`;
+                    const connUid = connPayload.id ? String(connPayload.id) : null;
                     const maxPowerKw = connPayload.max_electric_power
                         ? parseFloat(connPayload.max_electric_power) / 1000
                         : (connPayload.max_power_kw ? parseFloat(connPayload.max_power_kw) : 22.0);
 
+                    // Scope the connector lookup to this charge point so a connectorUid
+                    // collision elsewhere in the table can't hijack a foreign device.
                     let connector = await prisma.connector.findFirst({
                         where: {
+                            chargePointId: chargePoint.id,
                             OR: [
-                                { connectorUid: connUid },
-                                { AND: [{ chargePointId: chargePoint.id }, { standard: connPayload.standard || 'IEC_62196_T2' }] }
+                                ...(connUid ? [{ connectorUid: connUid }] : []),
+                                { standard: connPayload.standard || 'IEC_62196_T2' }
                             ]
                         }
                     });
@@ -246,8 +327,7 @@ exports.syncOperatorData = async (req, res) => {
         console.error("Operator sync error:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to process operator and infrastructure sync payload.",
-            error: error.message
+            message: "Failed to process operator and infrastructure sync payload."
         });
     }
 };

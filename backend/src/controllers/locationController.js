@@ -230,7 +230,11 @@ exports.createLocation = async (req, res) => {
                     ownerData: typeof ownerData === 'object' ? JSON.stringify(ownerData) : ownerData || null,
                     openingTimesData: typeof openingTimesData === 'object' ? JSON.stringify(openingTimesData) : openingTimesData || null,
                     directions: typeof directions === 'object' ? JSON.stringify(directions) : directions || null,
-                    isApproved: true
+                    // Super Admin-created locations are auto-approved (they are the
+                    // moderator); everyone else's submissions enter the moderation
+                    // queue and require explicit approval before appearing on the
+                    // public feed - see moderationController.getPendingSubmissions.
+                    isApproved: role === 'SUPER_ADMIN'
                 }
             });
 
@@ -276,11 +280,23 @@ exports.updateLocation = async (req, res) => {
             city, state, countryCode, partyId, countryISO, parkingType, timeZone,
             chargingWhenClosed, operatorData, suboperatorData, ownerData, openingTimesData, directions
         } = req.body;
-        const userId = req.user.id;
+        const { id: userId, role, companyId: userCompanyId } = req.user;
         const clientIp = getClientIp(req);
 
+        const existingLocation = await prisma.location.findUnique({ where: { id: parseInt(id, 10) } });
+
+        if (!existingLocation) {
+            return res.status(404).json({ success: false, message: "Target location entry not found." });
+        }
+
+        if (role !== 'SUPER_ADMIN' && existingLocation.companyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Target location belongs to a different network operator profile." });
+        }
+
+        // Moderation approval is a Super Admin-only decision - a company's own admins
+        // must not be able to self-approve their own submissions through this route.
         let parsedIsApproved = undefined;
-        if (isApproved !== undefined) {
+        if (isApproved !== undefined && role === 'SUPER_ADMIN') {
             parsedIsApproved = isApproved === 'true' || isApproved === true;
         }
 
@@ -361,7 +377,7 @@ exports.updateLocation = async (req, res) => {
 exports.deleteLocation = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
+        const { id: userId, role, companyId: userCompanyId } = req.user;
         const parsedId = parseInt(id, 10);
         const clientIp = getClientIp(req);
 
@@ -375,6 +391,10 @@ exports.deleteLocation = async (req, res) => {
 
         if (!locationToDelete) {
             return res.status(404).json({ success: false, message: "Target location entry not found." });
+        }
+
+        if (role !== 'SUPER_ADMIN' && locationToDelete.companyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Target location belongs to a different network operator profile." });
         }
 
         // Execute Cascading Purge inside a Transaction
@@ -429,14 +449,25 @@ exports.deleteLocation = async (req, res) => {
 exports.deleteLocationImage = async (req, res) => {
     try {
         const { mediaId } = req.params;
+        const { role, companyId: userCompanyId } = req.user;
         const parsedMediaId = parseInt(mediaId, 10);
 
         const mediaItem = await prisma.media.findUnique({
-            where: { id: parsedMediaId }
+            where: { id: parsedMediaId },
+            include: {
+                location: { select: { companyId: true } },
+                chargePoint: { select: { location: { select: { companyId: true } } } }
+            }
         });
 
         if (!mediaItem) {
             return res.status(404).json({ success: false, message: "Target media asset not found." });
+        }
+
+        const ownerCompanyId = mediaItem.location?.companyId ?? mediaItem.chargePoint?.location?.companyId ?? null;
+
+        if (role !== 'SUPER_ADMIN' && ownerCompanyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Target media asset belongs to a different network operator profile." });
         }
 
         purgePhysicalFile(mediaItem.url);

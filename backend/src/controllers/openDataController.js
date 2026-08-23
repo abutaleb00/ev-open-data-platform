@@ -2,7 +2,6 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
 
-// Helper Extraction Module: Pulls real client IP down behind proxies safely
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
     if (forwardedFor) {
@@ -11,21 +10,35 @@ const getClientIp = (req) => {
     return req.ip || req.socket.remoteAddress;
 };
 
+// Helper 1: Safely parses JSON string columns without crashing
+const safeJsonParse = (str) => {
+    if (!str) return null;
+    try {
+        return JSON.parse(str);
+    } catch (_) {
+        return str;
+    }
+};
+const parseNumericId = (val) => {
+    if (!val) return null;
+    if (typeof val === 'number') return val;
+    const cleaned = String(val).replace(/^\D+/g, '');
+    const parsed = parseInt(cleaned, 10);
+    return isNaN(parsed) ? null : parsed;
+};
+
+// 1. PUBLIC OPEN DATA FEED
 exports.getPublicFeed = async (req, res) => {
     try {
         const { search, companyId, operator_reference_id, page = 1, limit = 50, preview } = req.query;
 
-        const parsedPage = Math.max(1, parseInt(page) || 1);
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit) || 50));
+        const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        // Establish compliance check boundaries
         const shouldFilterApproved = preview !== 'true';
-
-        // Define root query filter criteria
         const whereClause = shouldFilterApproved ? { isApproved: true } : {};
 
-        // Filter by Operator Reference ID if passed in query string
         if (operator_reference_id) {
             whereClause.OR = [
                 { operatorReferenceId: String(operator_reference_id) },
@@ -33,15 +46,13 @@ exports.getPublicFeed = async (req, res) => {
             ];
         }
 
-        // Tenancy filter boundary integration
-        if (companyId && !isNaN(parseInt(companyId))) {
-            whereClause.companyId = parseInt(companyId);
+        if (companyId && !isNaN(parseInt(companyId, 10))) {
+            whereClause.companyId = parseInt(companyId, 10);
         }
 
-        // Apply dynamic parameter search mapping
         if (search && search.trim() !== '') {
             const searchString = search.trim();
-            const parsedSearchId = parseInt(searchString);
+            const parsedSearchId = parseNumericId(searchString);
 
             const orConditions = [
                 { name: { contains: searchString } },
@@ -49,18 +60,13 @@ exports.getPublicFeed = async (req, res) => {
                 { city: { contains: searchString } }
             ];
 
-            if (!isNaN(parsedSearchId)) {
+            if (parsedSearchId !== null) {
                 orConditions.push({ id: parsedSearchId });
             }
 
-            whereClause.AND = [
-                {
-                    OR: orConditions
-                }
-            ];
+            whereClause.AND = [{ OR: orConditions }];
         }
 
-        // Run sequential transactions safely over database indexes
         const [locations, totalCount] = await prisma.$transaction([
             prisma.location.findMany({
                 where: whereClause,
@@ -70,9 +76,7 @@ exports.getPublicFeed = async (req, res) => {
                     chargePoints: {
                         include: { connectors: true }
                     },
-                    media: {
-                        select: { url: true, type: true }
-                    },
+                    media: { select: { url: true, type: true } },
                     company: { select: { name: true, operatorReferenceId: true } }
                 },
                 orderBy: { createdAt: 'desc' }
@@ -80,122 +84,122 @@ exports.getPublicFeed = async (req, res) => {
             prisma.location.count({ where: whereClause })
         ]);
 
-        // Map database matrices down into highly resilient structural objects
         const ocpiFormattedData = locations.map(loc => {
             const relevantChargePoints = (loc.chargePoints || []).filter(cp => {
                 if (!shouldFilterApproved) return true;
                 return cp.isApproved === true;
             });
 
-            // Safe String/JSON parsing fault blocks
-            let parsedPublishAllowed = [];
-            let parsedRelatedLocations = [];
+            // Parse stored JSON payload strings
+            let parsedPublishAllowed = null;
+            let parsedRelatedLocations = null;
             let parsedEnergyMix = null;
+            let parsedOperator = null;
+            let parsedSuboperator = null;
+            let parsedOwner = null;
+            let parsedOpeningTimes = null;
+            let parsedDirections = [];
 
             try { if (loc.publishAllowedTo) parsedPublishAllowed = JSON.parse(loc.publishAllowedTo); } catch (_) { }
             try { if (loc.relatedLocations) parsedRelatedLocations = JSON.parse(loc.relatedLocations); } catch (_) { }
             try { if (loc.energyMix) parsedEnergyMix = JSON.parse(loc.energyMix); } catch (_) { }
+            try { if (loc.operatorData) parsedOperator = JSON.parse(loc.operatorData); } catch (_) { }
+            try { if (loc.suboperatorData) parsedSuboperator = JSON.parse(loc.suboperatorData); } catch (_) { }
+            try { if (loc.ownerData) parsedOwner = JSON.parse(loc.ownerData); } catch (_) { }
+            try { if (loc.openingTimesData) parsedOpeningTimes = JSON.parse(loc.openingTimesData); } catch (_) { }
+            try { if (loc.directions) parsedDirections = JSON.parse(loc.directions); } catch (_) { }
 
             return {
                 country_code: loc.countryCode || "GB",
-                party_id: loc.partyId || "UNSET",
-                id: `loc_${loc.id}`,
+                party_id: loc.partyId || "Ada",
+                id: loc.locationUid || `loc_${loc.id}`,
                 publish: loc.publish ?? true,
-                publish_allowed_to: Array.isArray(parsedPublishAllowed) ? parsedPublishAllowed : [],
-                name: loc.name || "Unnamed Charging Hub",
-                address: loc.address || "No Physical Address Registered",
-                city: loc.city || "Unknown",
+                publish_allowed_to: parsedPublishAllowed,
+                name: loc.name || "",
+                address: loc.address || "",
+                city: loc.city || "",
                 postal_code: loc.postcode || "",
                 state: loc.state || null,
-                country: loc.countryISO || "GBR",
+                country: loc.countryISO || "United Kingdom",
                 coordinates: {
                     latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
                     longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
                 },
-                related_locations: Array.isArray(parsedRelatedLocations) ? parsedRelatedLocations : [],
-                parking_type: loc.parkingType || "UNKNOWN",
+                related_locations: parsedRelatedLocations,
+                parking_type: loc.parkingType || "ON_STREET",
 
-                // Map Child Hardware metrics safely
                 evses: relevantChargePoints.map(cp => {
                     let parsedEvseImages = [];
+                    let parsedEvseDirections = [];
+                    let parsedStatusSchedule = null;
+
                     try { if (cp.evseImages) parsedEvseImages = JSON.parse(cp.evseImages); } catch (_) { }
+                    try { if (cp.directions) parsedEvseDirections = JSON.parse(cp.directions); } catch (_) { }
+                    try { if (cp.statusSchedule) parsedStatusSchedule = JSON.parse(cp.statusSchedule); } catch (_) { }
 
                     return {
-                        uid: cp.hardwareId ? `GB*${loc.partyId || 'CPO'}*E${cp.hardwareId}-1` : `GB*${loc.partyId || 'CPO'}*E${cp.id}-1`,
-                        evse_id: cp.hardwareId || `GB*${loc.partyId || 'CPO'}*E${cp.id}`,
-                        status: cp.status || "UNKNOWN",
-                        status_schedule: cp.statusSchedule ? (typeof cp.statusSchedule === 'string' ? JSON.parse(cp.statusSchedule) : cp.statusSchedule) : [],
+                        uid: cp.evseUid || cp.hardwareId || cp.id.toString(),
+                        evse_id: cp.hardwareId || cp.id.toString(),
+                        status: cp.status || "Available",
+                        status_schedule: parsedStatusSchedule,
                         capabilities: cp.capabilities ? cp.capabilities.split(',').map(c => c.trim()) : ["REMOTE_START_STOP_CAPABLE"],
-                        connectors: (cp.connectors || []).map(conn => ({
-                            id: conn.id.toString(),
-                            status: conn.status || "AVAILABLE",
-                            standard: conn.standard || "IEC_62196_T2",
-                            format: conn.format || "SOCKET",
-                            power_type: conn.powerType || "AC_3_PHASE",
-                            max_voltage: conn.voltage !== null && conn.voltage !== undefined ? conn.voltage : 230,
-                            max_amperage: conn.amperage !== null && conn.amperage !== undefined ? conn.amperage : 32,
-                            max_electric_power: conn.maxPowerKw ? Math.round(conn.maxPowerKw * 1000) : null,
-                            tariff_ids: conn.tariffId ? [conn.tariffId.toString()] : [],
-                            terms_and_conditions: conn.termsAndConditions || null,
-                            last_updated: cp.updatedAt || new Date().toISOString(),
-                            voltage: conn.voltage !== null && conn.voltage !== undefined ? conn.voltage : 230,
-                            amperage: conn.amperage !== null && conn.amperage !== undefined ? conn.amperage : 32
-                        })),
-                        floor_level: cp.floorLevel || null,
+                        connectors: (cp.connectors || []).map(conn => {
+                            let parsedTariffIds = [];
+                            try { if (conn.tariffIdsJson) parsedTariffIds = JSON.parse(conn.tariffIdsJson); } catch (_) { }
+
+                            return {
+                                id: conn.connectorUid || conn.id.toString(),
+                                standard: conn.standard || "IEC_62196_T2",
+                                format: conn.format || "Socket",
+                                power_type: conn.powerType || "AC_3_PHASE",
+                                max_voltage: conn.voltage !== null && conn.voltage !== undefined ? conn.voltage : 440,
+                                max_amperage: conn.amperage !== null && conn.amperage !== undefined ? conn.amperage : 32,
+                                max_electric_power: conn.maxPowerKw ? Math.round(conn.maxPowerKw * 1000) : 22000,
+                                tariff_ids: parsedTariffIds,
+                                terms_and_conditions: conn.termsAndConditions !== null ? conn.termsAndConditions : "",
+                                last_updated: cp.updatedAt ? cp.updatedAt.toISOString() : new Date().toISOString()
+                            };
+                        }),
+                        floor_level: cp.floorLevel || "",
                         coordinates: cp.evseLatitude && cp.evseLongitude ? {
                             latitude: cp.evseLatitude.toString(),
                             longitude: cp.evseLongitude.toString()
-                        } : null,
-
-                        // Read explicitly from database physicalReference column first
-                        physical_reference: cp.physicalReference || (cp.hardwareId ? cp.hardwareId.slice(-6) : cp.id.toString()),
-
-                        directions: cp.directions ? [{ language: "en", text: cp.directions }] : [],
+                        } : {
+                            latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
+                            longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
+                        },
+                        physical_reference: cp.physicalReference || "",
+                        directions: Array.isArray(parsedEvseDirections) ? parsedEvseDirections : [],
                         parking_restrictions: cp.parkingRestrictions ? cp.parkingRestrictions.split(',').map(p => p.trim()) : [],
-                        images: Array.isArray(parsedEvseImages) ? parsedEvseImages.map(img => ({
-                            url: typeof img === 'string' ? img : img.url,
-                            category: "CHARGER"
-                        })) : [],
-                        last_updated: cp.updatedAt || new Date().toISOString()
+                        images: Array.isArray(parsedEvseImages) ? parsedEvseImages : []
                     };
                 }),
 
-                directions: loc.directions ? [{ language: "en", text: loc.directions }] : [],
-                operator: {
-                    name: loc.company?.name || "Independent Operator"
-                },
-                suboperator: loc.suboperatorName ? {
-                    name: loc.suboperatorName,
-                    website: loc.suboperatorWebsite || null,
-                    logo: loc.suboperatorLogoUrl ? { url: loc.suboperatorLogoUrl } : null
-                } : null,
-                owner: null,
+                directions: Array.isArray(parsedDirections) ? parsedDirections : [],
+                operator: parsedOperator || { name: loc.company?.name || "Adam Street Ltd" },
+                suboperator: parsedSuboperator,
+                owner: parsedOwner,
                 facilities: loc.amenities ? loc.amenities.split(',').map(f => f.trim()).filter(Boolean) : [],
                 time_zone: loc.timeZone || "Europe/London",
-                opening_times: {
-                    twentyfourseven: true,
+                opening_times: parsedOpeningTimes || {
+                    twentyfourseven: false,
                     regular_hours: [],
-                    exceptional_openings: [],
-                    exceptional_closings: []
+                    exceptional_openings: null,
+                    exceptional_closings: null
                 },
-                charging_when_closed: loc.chargingWhenClosed ?? true,
+                charging_when_closed: loc.chargingWhenClosed ?? false,
                 images: (loc.media || []).map(m => ({
                     url: m.url,
                     type: m.type || "OTHER",
                     category: "ENTRANCE"
                 })),
-
-                energy_mix: parsedEnergyMix ? {
-                    is_green_energy: parsedEnergyMix.is_green_energy ?? false,
-                    supplier_name: parsedEnergyMix.supplier_name || null,
-                    energy_product_name: parsedEnergyMix.energy_product_name || null
-                } : null,
-
-                last_updated: loc.updatedAt || new Date().toISOString(),
-                location_point: {
-                    type: "Point",
-                    coordinates: [parseFloat(loc.longitude || 0), parseFloat(loc.latitude || 0)]
-                }
+                energy_mix: parsedEnergyMix || {
+                    is_green_energy: null,
+                    energy_sources: null,
+                    supplier_name: null,
+                    energy_product_name: null
+                },
+                last_updated: loc.updatedAt ? loc.updatedAt.toISOString() : new Date().toISOString()
             };
         });
 
@@ -213,28 +217,209 @@ exports.getPublicFeed = async (req, res) => {
             data: ocpiFormattedData
         });
     } catch (error) {
-        console.error("OCPI data compilation fault:", error);
-        res.status(500).json({ name: "ERROR", message: "Failed to compile compliance open data stream matrix." });
+        console.error("OCPI feed error:", error);
+        res.status(500).json({ name: "ERROR", message: "Failed to compile compliance open data stream." });
     }
 };
 
-// GET Admin Portal Request Metrics & IP Logs
-exports.getTrafficMetrics = async (req, res) => {
+exports.getDashboardFeedPreview = async (req, res) => {
     try {
-        const { days = 7, limit = 50, operator_reference_id } = req.query;
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - parseInt(days));
+        const { role, companyId } = req.user;
+        const { search, page = 1, limit = 10 } = req.query;
 
-        const whereClause = {
-            createdAt: { gte: startDate }
-        };
+        const parsedPage = Math.max(1, parseInt(page, 10));
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10)));
+        const offset = (parsedPage - 1) * parsedLimit;
 
-        if (operator_reference_id) {
-            whereClause.operatorReferenceId = String(operator_reference_id);
+        const whereClause = role === 'SUPER_ADMIN' ? {} : { companyId: parseInt(companyId, 10) };
+
+        if (search && search.trim() !== '') {
+            const searchString = search.trim();
+            const parsedSearchId = parseNumericId(searchString);
+
+            const orConditions = [
+                { name: { contains: searchString } },
+                { postcode: { contains: searchString } },
+                { city: { contains: searchString } },
+                { locationUid: { contains: searchString } },
+                { operatorReferenceId: { contains: searchString } }
+            ];
+
+            if (parsedSearchId !== null) {
+                orConditions.push({ id: parsedSearchId });
+            }
+
+            whereClause.AND = [{ OR: orConditions }];
         }
 
-        const [totalRequests, topIPs, recentLogs] = await prisma.$transaction([
+        const [locations, totalCount] = await prisma.$transaction([
+            prisma.location.findMany({
+                where: whereClause,
+                skip: offset,
+                take: parsedLimit,
+                include: {
+                    company: {
+                        select: { id: true, name: true, operatorReferenceId: true }
+                    },
+                    media: {
+                        select: { id: true, url: true, type: true, category: true }
+                    },
+                    chargePoints: {
+                        include: {
+                            connectors: true
+                        }
+                    }
+                },
+                orderBy: { createdAt: 'desc' }
+            }),
+            prisma.location.count({ where: whereClause })
+        ]);
+
+        const ocpiFormattedData = locations.map(loc => {
+            const parsedOperator = safeJsonParse(loc.operatorData);
+            const parsedOwner = safeJsonParse(loc.ownerData);
+            const parsedSuboperator = safeJsonParse(loc.suboperatorData);
+            const parsedOpeningTimes = safeJsonParse(loc.openingTimesData);
+            const parsedDirections = safeJsonParse(loc.directions);
+            const parsedRelatedLocations = safeJsonParse(loc.relatedLocations);
+            const parsedPublishAllowedTo = safeJsonParse(loc.publishAllowedTo);
+            const parsedEnergyMix = safeJsonParse(loc.energyMix);
+
+            const formattedImages = loc.media && loc.media.length > 0
+                ? loc.media.map(m => ({ url: m.url, category: m.category || "ENTRANCE", type: m.type || "image/jpeg" }))
+                : [];
+
+            return {
+                country_code: loc.countryCode || "GB",
+                party_id: loc.partyId || "Ada",
+                id: loc.locationUid || `loc_${loc.id}`,
+                publish: loc.publish ?? true,
+                name: loc.name || "",
+                address: loc.address || "",
+                city: loc.city || "",
+                state: loc.state || null,
+                postal_code: loc.postcode || "",
+                country: loc.countryISO || "United Kingdom",
+                coordinates: {
+                    latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
+                    longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
+                },
+                parking_type: loc.parkingType || "UNKNOWN",
+                time_zone: loc.timeZone || "Europe/London",
+                facilities: loc.amenities ? loc.amenities.split(',').map(a => a.trim()) : [],
+                charging_when_closed: loc.chargingWhenClosed,
+                opening_times: parsedOpeningTimes,
+                directions: Array.isArray(parsedDirections) ? parsedDirections : [],
+                related_locations: parsedRelatedLocations,
+                publish_allowed_to: parsedPublishAllowedTo,
+                energy_mix: parsedEnergyMix,
+                images: formattedImages,
+
+                operator: parsedOperator || { name: loc.company?.name || "Independent Operator" },
+                suboperator: parsedSuboperator,
+                owner: parsedOwner,
+
+                evses: (loc.chargePoints || []).map(cp => {
+                    const parsedEvseDirections = safeJsonParse(cp.directions);
+                    const parsedEvseImages = safeJsonParse(cp.evseImages);
+                    const parsedStatusSchedule = safeJsonParse(cp.statusSchedule);
+
+                    return {
+                        uid: cp.evseUid || cp.hardwareId || cp.id.toString(),
+                        evse_id: cp.hardwareId || cp.id.toString(),
+                        status: cp.status || "AVAILABLE",
+                        floor_level: cp.floorLevel || "",
+                        physical_reference: cp.physicalReference || null,
+                        status_schedule: parsedStatusSchedule,
+                        parking_restrictions: cp.parkingRestrictions ? cp.parkingRestrictions.split(',').map(p => p.trim()) : [],
+                        capabilities: cp.capabilities ? cp.capabilities.split(',').map(c => c.trim()) : [],
+                        directions: Array.isArray(parsedEvseDirections) ? parsedEvseDirections : [],
+                        images: Array.isArray(parsedEvseImages) ? parsedEvseImages : [],
+                        coordinates: (cp.evseLatitude && cp.evseLongitude) ? {
+                            latitude: cp.evseLatitude.toString(),
+                            longitude: cp.evseLongitude.toString()
+                        } : undefined,
+
+                        connectors: (cp.connectors || []).map(conn => {
+                            const parsedTariffIds = safeJsonParse(conn.tariffIdsJson);
+                            return {
+                                id: conn.connectorUid || conn.id.toString(),
+                                status: conn.status || "AVAILABLE",
+                                standard: conn.standard || "IEC_62196_T2",
+                                format: conn.format || "SOCKET",
+                                power_type: conn.powerType || "AC_3_PHASE",
+                                max_voltage: conn.voltage || 230,
+                                max_amperage: conn.amperage || 32,
+                                max_electric_power: conn.maxPowerKw ? Math.round(conn.maxPowerKw * 1000) : 22000,
+                                terms_and_conditions: conn.termsAndConditions || "",
+                                tariff_ids: Array.isArray(parsedTariffIds) ? parsedTariffIds : (conn.tariffId ? [conn.tariffId.toString()] : [])
+                            };
+                        })
+                    };
+                })
+            };
+        });
+
+        res.json({
+            success: true,
+            meta: {
+                total_records: totalCount,
+                total_pages: Math.ceil(totalCount / parsedLimit),
+                current_page: parsedPage,
+                limit: parsedLimit
+            },
+            data: ocpiFormattedData
+        });
+    } catch (error) {
+        console.error("Dashboard feed preview error:", error);
+        res.status(500).json({ success: false, message: "Failed to compile tenant preview matrix." });
+    }
+};
+
+// ------------------------------------------------------
+// 2. REAL-TIME TRAFFIC METRICS & AUDIT LOGS
+// ------------------------------------------------------
+exports.getTrafficMetrics = async (req, res) => {
+    try {
+        const { role, companyId } = req.user;
+        const { days = 7, limit = 50, operator_reference_id } = req.query;
+
+        const parsedDays = Math.max(1, parseInt(days, 10));
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - parsedDays);
+
+        const whereClause = { createdAt: { gte: startDate } };
+
+        if (role !== 'SUPER_ADMIN') {
+            const userCompany = await prisma.company.findUnique({
+                where: { id: parseInt(companyId, 10) },
+                select: { operatorReferenceId: true }
+            });
+            if (userCompany && userCompany.operatorReferenceId) {
+                whereClause.operatorReferenceId = userCompany.operatorReferenceId;
+            }
+        } else if (operator_reference_id && String(operator_reference_id).trim() !== '') {
+            whereClause.operatorReferenceId = String(operator_reference_id).trim();
+        }
+
+        // Execute parallel query transaction
+        const [
+            totalRequests,
+            statusDistribution,
+            topIPs,
+            recentLogs
+        ] = await prisma.$transaction([
+            // 1. Total Requests Count
             prisma.requestLog.count({ where: whereClause }),
+
+            // 2. HTTP Status Code Breakdown Grouping
+            prisma.requestLog.groupBy({
+                by: ['statusCode'],
+                where: whereClause,
+                _count: { statusCode: true }
+            }),
+
+            // 3. Top Client IPs Grouping
             prisma.requestLog.groupBy({
                 by: ['ipAddress'],
                 where: whereClause,
@@ -242,29 +427,54 @@ exports.getTrafficMetrics = async (req, res) => {
                 orderBy: { _count: { ipAddress: 'desc' } },
                 take: 10
             }),
+
+            // 4. Recent Logs Stream
             prisma.requestLog.findMany({
                 where: whereClause,
-                take: parseInt(limit),
+                take: Math.min(100, parseInt(limit, 10)),
                 orderBy: { createdAt: 'desc' }
             })
         ]);
 
+        // Map status code counts into a lookup dictionary
+        const statusMap = {};
+        statusDistribution.forEach(item => {
+            statusMap[item.statusCode] = item._count.statusCode;
+        });
+
+        const rateLimitedCount = statusMap[429] || 0;
+        const successCount = (statusMap[200] || 0) + (statusMap[201] || 0);
+
         return res.json({
             success: true,
             summary: {
-                timeframe_days: parseInt(days),
-                total_requests: totalRequests
+                timeframe_days: parsedDays,
+                total_requests: totalRequests,
+                rate_limited_requests: rateLimitedCount,
+                success_requests: successCount,
+                status_breakdown: statusMap
             },
-            top_client_ips: topIPs.map(i => ({ ip: i.ipAddress, count: i._count.ipAddress })),
-            recent_logs: recentLogs
+            top_client_ips: topIPs.map(i => ({
+                ip: i.ipAddress || '127.0.0.1',
+                count: i._count.ipAddress
+            })),
+            recent_logs: recentLogs.map(log => ({
+                id: log.id,
+                ip: log.ipAddress || '127.0.0.1',
+                endpoint: log.endpoint,
+                method: log.method,
+                status_code: log.statusCode,
+                user_agent: log.userAgent,
+                timestamp: log.createdAt
+            }))
         });
     } catch (error) {
-        console.error("Error fetching traffic metrics:", error);
+        console.error("Traffic metrics error:", error);
         res.status(500).json({ success: false, message: "Failed to fetch traffic metrics." });
     }
 };
 
-// 2. Secured: Get developer API Keys for a company
+// 4. GET COMPANY API KEYS
 exports.getCompanyKeys = async (req, res) => {
     try {
         const { role, companyId } = req.user;
@@ -272,16 +482,14 @@ exports.getCompanyKeys = async (req, res) => {
         let whereClause = {};
         if (role !== 'SUPER_ADMIN') {
             if (!companyId) {
-                return res.status(400).json({ success: false, message: "User account is not bound to an operator company profile." });
+                return res.status(400).json({ success: false, message: "User account is not bound to a company profile." });
             }
-            whereClause = { companyId: parseInt(companyId) };
+            whereClause = { companyId: parseInt(companyId, 10) };
         }
 
         const keys = await prisma.apiKey.findMany({
             where: whereClause,
-            include: {
-                company: { select: { name: true } }
-            },
+            include: { company: { select: { name: true } } },
             orderBy: { createdAt: 'desc' }
         });
         res.json({ success: true, data: keys });
@@ -291,25 +499,22 @@ exports.getCompanyKeys = async (req, res) => {
     }
 };
 
-// 3. Secured: Generate a new API Key string
+// 5. GENERATE API KEY
 exports.generateApiKey = async (req, res) => {
     try {
         const { name, companyId: requestedCompanyId } = req.body;
         const { companyId, id: userId, role } = req.user;
         const clientIp = getClientIp(req);
 
-        // Parse IDs safely while handling potential string or integer variants cleanly
-        const parsedRequestedId = requestedCompanyId ? parseInt(requestedCompanyId) : null;
-        const parsedUserCompanyId = companyId ? parseInt(companyId) : null;
+        const parsedRequestedId = requestedCompanyId ? parseInt(requestedCompanyId, 10) : null;
+        const parsedUserCompanyId = companyId ? parseInt(companyId, 10) : null;
 
-        // Establish the target assignment based on permissions roles matrix
         let targetCompanyId = role === 'SUPER_ADMIN' ? parsedRequestedId : parsedUserCompanyId;
 
-        // Explicit check against null, undefined, or failed conversion outcomes
-        if (targetCompanyId === null || targetCompanyId === undefined || isNaN(targetCompanyId)) {
+        if (!targetCompanyId || isNaN(targetCompanyId)) {
             return res.status(400).json({
                 success: false,
-                message: "A valid target Company ID context must be specified to provision API keys."
+                message: "A valid target Company ID context must be specified."
             });
         }
 
@@ -340,36 +545,28 @@ exports.generateApiKey = async (req, res) => {
 
         res.status(201).json({ success: true, data: apiKeyRecord });
     } catch (error) {
-        console.error("API Key generation engine fault:", error);
+        console.error("API Key generation error:", error);
         res.status(500).json({ success: false, message: "Failed to generate access key." });
     }
 };
 
-// 4. Public Endpoint: Expose approved tariffs with Filtering, Pagination, and Search
+// 6. GET PUBLIC TARIFFS
 exports.getPublicTariffs = async (req, res) => {
     try {
         const { search, companyId, page = 1, limit = 50 } = req.query;
 
-        const parsedPage = Math.max(1, parseInt(page));
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit)));
+        const parsedPage = Math.max(1, parseInt(page, 10));
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10)));
         const offset = (parsedPage - 1) * parsedLimit;
 
         const whereClause = {};
 
         if (companyId) {
-            whereClause.companyId = parseInt(companyId);
+            whereClause.companyId = parseInt(companyId, 10);
         }
 
         if (search && search.trim() !== '') {
-            const searchString = search.trim();
-            whereClause.AND = [
-                {
-                    OR: [
-                        { currency: { contains: searchString } },
-                        { pricePerKwh: { contains: searchString } }
-                    ]
-                }
-            ];
+            whereClause.currency = { contains: search.trim() };
         }
 
         const [tariffs, totalCount] = await prisma.$transaction([
@@ -413,114 +610,22 @@ exports.getPublicTariffs = async (req, res) => {
             data: ocpiTariffs
         });
     } catch (error) {
-        console.error("Tariff matrix generation failure:", error);
-        res.status(500).json({ name: "ERROR", message: "Failed to generate public compliance tariff feed matrix." });
+        console.error("Public tariff error:", error);
+        res.status(500).json({ name: "ERROR", message: "Failed to generate public tariff feed." });
     }
 };
 
-// 5. SECURED DASHBOARD PREVIEW: Expose ONLY the logged-in company's locations
-exports.getDashboardFeedPreview = async (req, res) => {
-    try {
-        const { role, companyId } = req.user;
-        const { search, page = 1, limit = 10 } = req.query;
-
-        const parsedPage = Math.max(1, parseInt(page));
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit)));
-        const offset = (parsedPage - 1) * parsedLimit;
-
-        const whereClause = role === 'SUPER_ADMIN' ? {} : { companyId: parseInt(companyId) };
-
-        // Apply fallback criteria if dynamic text searches are active
-        if (search && search.trim() !== '') {
-            const searchString = search.trim();
-            const parsedSearchId = parseInt(searchString);
-
-            // Build the query options matrix
-            const orConditions = [
-                { name: { contains: searchString } },
-                { postcode: { contains: searchString } },
-                { city: { contains: searchString } }
-            ];
-
-            // If the input search metric is a valid integer number, include direct primary key checking
-            if (!isNaN(parsedSearchId)) {
-                orConditions.push({ id: parsedSearchId });
-            }
-
-            whereClause.AND = [
-                {
-                    OR: orConditions
-                }
-            ];
-        }
-
-        const [locations, totalCount] = await prisma.$transaction([
-            prisma.location.findMany({
-                where: whereClause,
-                skip: offset,
-                take: parsedLimit,
-                include: {
-                    chargePoints: { include: { connectors: true } },
-                    media: { select: { url: true, type: true } },
-                    company: { select: { name: true } }
-                },
-                orderBy: { createdAt: 'desc' }
-            }),
-            prisma.location.count({ where: whereClause })
-        ]);
-
-        const ocpiFormattedData = locations.map(loc => ({
-            country_code: loc.countryCode,
-            party_id: loc.partyId,
-            id: `loc_${loc.id}`,
-            publish: loc.publish,
-            name: loc.name,
-            address: loc.address,
-            city: loc.city,
-            postal_code: loc.postcode,
-            coordinates: {
-                latitude: loc.latitude ? loc.latitude.toString() : "0.000000",
-                longitude: loc.longitude ? loc.longitude.toString() : "0.000000"
-            },
-            evses: (loc.chargePoints || []).map(cp => ({
-                uid: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}-1`,
-                evse_id: `GB*${loc.partyId}*E${cp.hardwareId || cp.id}`,
-                status: cp.status,
-                connectors: (cp.connectors || []).map(conn => ({
-                    id: conn.id.toString(),
-                    status: conn.status || "AVAILABLE",
-                    standard: conn.standard,
-                    format: conn.format,
-                    power_type: conn.powerType,
-                    max_electric_power: conn.maxPowerKw ? parseInt(conn.maxPowerKw) : null,
-                    tariff_ids: conn.tariffId ? [conn.tariffId.toString()] : []
-                }))
-            })),
-            operator: { name: loc.company?.name || "Independent Operator" }
-        }));
-
-        res.json({
-            success: true,
-            meta: { total_records: totalCount, total_pages: Math.ceil(totalCount / parsedLimit) },
-            data: ocpiFormattedData
-        });
-    } catch (error) {
-        console.error("Dashboard preview feed compiling exception:", error);
-        res.status(500).json({ success: false, message: "Failed to compile localized tenant data preview matrix." });
-    }
-};
-
-// 6. SECURED DASHBOARD PREVIEW: Expose ONLY the logged-in company's tariffs
+// 7. GET DASHBOARD TARIFFS PREVIEW
 exports.getDashboardTariffsPreview = async (req, res) => {
     try {
         const { role, companyId } = req.user;
         const { page = 1, limit = 10 } = req.query;
 
-        const parsedPage = Math.max(1, parseInt(page));
-        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit)));
+        const parsedPage = Math.max(1, parseInt(page, 10));
+        const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10)));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        const whereClause = role === 'SUPER_ADMIN' ? {} : { companyId: parseInt(companyId) };
+        const whereClause = role === 'SUPER_ADMIN' ? {} : { companyId: parseInt(companyId, 10) };
 
         const [tariffs, totalCount] = await prisma.$transaction([
             prisma.tariff.findMany({
@@ -551,33 +656,30 @@ exports.getDashboardTariffsPreview = async (req, res) => {
             data: ocpiTariffs
         });
     } catch (error) {
-        console.error("Dashboard tariff preview compilation exception:", error);
-        res.status(500).json({ success: false, message: "Failed to compile localized tenant tariff preview matrix." });
+        console.error("Dashboard tariff preview error:", error);
+        res.status(500).json({ success: false, message: "Failed to compile tariff preview." });
     }
 };
 
-// 7. EXTERNAL PARTNER DATA INGESTION: Securely maps and syncs automated third-party data feeds
+// 8. EXTERNAL INGESTION PIPELINE
 exports.ingestExternalData = async (req, res) => {
     try {
         const locations = req.body.data;
         const companyId = req.partnerCompanyId;
 
         if (!Array.isArray(locations)) {
-            return res.status(400).json({ success: false, message: "Invalid payload layout: 'data' node must be an array context." });
+            return res.status(400).json({ success: false, message: "Invalid payload layout: 'data' must be an array." });
         }
 
         for (const loc of locations) {
-            // Strip any non-numeric custom prefixes (like "loc_") if their ID maps as a mixed token string
-            const cleanedLocId = typeof loc.id === 'string' ? parseInt(loc.id.replace(/^\D+/g, '')) : parseInt(loc.id);
+            const cleanedLocId = parseNumericId(loc.id);
 
-            if (!cleanedLocId || isNaN(cleanedLocId)) {
-                continue; // Skip execution line if root indexing target is missing or corrupt
-            }
+            if (!cleanedLocId) continue;
 
-            // Sync Core Location Record: Map fields explicitly, leaving portal properties un-overwritten
             const savedLocation = await prisma.location.upsert({
                 where: { id: cleanedLocId },
                 update: {
+                    locationUid: String(loc.id),
                     name: loc.name,
                     address: loc.address,
                     postcode: loc.postal_code || "",
@@ -591,6 +693,7 @@ exports.ingestExternalData = async (req, res) => {
                 },
                 create: {
                     id: cleanedLocId,
+                    locationUid: String(loc.id),
                     name: loc.name,
                     address: loc.address,
                     postcode: loc.postal_code || "",
@@ -602,23 +705,25 @@ exports.ingestExternalData = async (req, res) => {
                     countryISO: loc.country || "GBR",
                     publish: loc.publish ?? true,
                     companyId: companyId,
-                    isApproved: true // Automatically approve imported automated rows
+                    isApproved: true
                 }
             });
 
-            // Process dynamic EVSE infrastructure chains
             if (loc.evses && Array.isArray(loc.evses)) {
                 for (const evse of loc.evses) {
-                    if (!evse.evse_id) continue;
+                    const hardwareIdVal = evse.evse_id || evse.uid || evse.id;
+                    if (!hardwareIdVal) continue;
 
                     const savedChargePoint = await prisma.chargePoint.upsert({
-                        where: { hardwareId: evse.evse_id },
+                        where: { hardwareId: String(hardwareIdVal) },
                         update: {
+                            evseUid: evse.uid ? String(evse.uid) : null,
                             status: (evse.status || "UNKNOWN").toUpperCase(),
                             locationId: savedLocation.id
                         },
                         create: {
-                            hardwareId: evse.evse_id,
+                            hardwareId: String(hardwareIdVal),
+                            evseUid: evse.uid ? String(evse.uid) : null,
                             status: (evse.status || "UNKNOWN").toUpperCase(),
                             locationId: savedLocation.id,
                             isApproved: true,
@@ -626,27 +731,26 @@ exports.ingestExternalData = async (req, res) => {
                         }
                     });
 
-                    // Clear and resync underlying Connector profiles to maintain clean state mappings
                     if (evse.connectors && Array.isArray(evse.connectors)) {
                         await prisma.connector.deleteMany({
                             where: { chargePointId: savedChargePoint.id }
                         });
 
                         for (const conn of evse.connectors) {
-                            // Safely convert power structures down to Kw from raw watt metric values
                             const parsedPowerKw = conn.max_electric_power ? parseFloat(conn.max_electric_power) / 1000 : 7.4;
 
                             await prisma.connector.create({
                                 data: {
                                     chargePointId: savedChargePoint.id,
+                                    connectorUid: conn.id ? String(conn.id) : null,
                                     type: (conn.power_type || "AC_3_PHASE").includes("DC") ? "DC" : "AC",
                                     maxPowerKw: parsedPowerKw,
                                     status: evse.status === "Available" ? "AVAILABLE" : "UNKNOWN",
                                     standard: conn.standard || "IEC_62196_T2",
                                     format: (conn.format || "SOCKET").toUpperCase(),
                                     powerType: conn.power_type || "AC_3_PHASE",
-                                    voltage: parseInt(conn.max_voltage) || 230,
-                                    amperage: parseInt(conn.max_amperage) || 32
+                                    voltage: parseInt(conn.max_voltage, 10) || 230,
+                                    amperage: parseInt(conn.max_amperage, 10) || 32
                                 }
                             });
                         }
@@ -657,23 +761,20 @@ exports.ingestExternalData = async (req, res) => {
 
         return res.status(200).json({ success: true, message: "Data ingestion sequence completed successfully.", processedCount: locations.length });
     } catch (error) {
-        console.error("Partner pipeline sync critical crash:", error);
-        return res.status(500).json({ success: false, message: "Internal application transaction processing error." });
+        console.error("Partner pipeline sync error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error processing ingestion payload." });
     }
 };
 
-// 8. PORTAL ADMIN ENDPOINT: Complete spreadsheet-mapped open data metadata update
+// 9. PORTAL ADMIN METADATA ENRICHMENT
 exports.updateLocationMetadata = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { role, companyId } = req.user;
-        const locationId = parseInt(id);
+        const locationId = parseNumericId(req.params.id);
 
-        if (isNaN(locationId)) {
+        if (!locationId) {
             return res.status(400).json({ success: false, message: "Invalid location ID format." });
         }
 
-        // 1. Fetch location to verify tenancy ownership
         const existingLocation = await prisma.location.findUnique({
             where: { id: locationId }
         });
@@ -682,13 +783,11 @@ exports.updateLocationMetadata = async (req, res) => {
             return res.status(404).json({ success: false, message: "Location not found." });
         }
 
-        if (role !== 'SUPER_ADMIN' && existingLocation.companyId !== parseInt(companyId)) {
+        if (req.user.role !== 'SUPER_ADMIN' && existingLocation.companyId !== parseInt(req.user.companyId, 10)) {
             return res.status(403).json({ success: false, message: "Forbidden: Access denied." });
         }
 
-        // 2. Destructure all explicitly required editable properties
         const {
-            // Location-Level Properties
             publish,
             publishAllowedTo,
             latitude,
@@ -702,16 +801,11 @@ exports.updateLocationMetadata = async (req, res) => {
             chargingWhenClosed,
             energyMix,
             amenities,
-            images, // Array of location images strings or objects
-
-            // Child EVSE-Level Updates Array
+            images,
             evses
         } = req.body;
 
-        // 3. Execute all updates inside an isolated transactional database pipeline
         await prisma.$transaction(async (tx) => {
-
-            // A. Update the parent location parameters
             await tx.location.update({
                 where: { id: locationId },
                 data: {
@@ -729,7 +823,6 @@ exports.updateLocationMetadata = async (req, res) => {
                     amenities: amenities !== undefined ? amenities : existingLocation.amenities,
                     energyMix: energyMix !== undefined ? JSON.stringify(energyMix) : existingLocation.energyMix,
 
-                    // Sync location-level media references if your schema uses a separate media array table
                     ...(images !== undefined && {
                         media: {
                             deleteMany: {},
@@ -739,26 +832,23 @@ exports.updateLocationMetadata = async (req, res) => {
                 }
             });
 
-            // B. Process child EVSE updates if supplied in the form payload array
             if (evses && Array.isArray(evses)) {
                 for (const evseItem of evses) {
-                    // Match child using either technical autoincrement ID or unique EVSE token string
+                    const parsedEvseId = parseNumericId(evseItem.id);
                     await tx.chargePoint.updateMany({
                         where: {
                             locationId: locationId,
                             OR: [
-                                { id: !isNaN(parseInt(evseItem.id)) ? parseInt(evseItem.id) : -1 },
-                                { hardwareId: evseItem.evse_id }
+                                { id: parsedEvseId || -1 },
+                                { hardwareId: String(evseItem.evse_id || evseItem.hardwareId || "") }
                             ]
                         },
                         data: {
                             floorLevel: evseItem.floor_level !== undefined ? evseItem.floor_level : undefined,
                             parkingRestrictions: evseItem.parking_restrictions !== undefined ? evseItem.parking_restrictions : undefined,
-
-                            // Map coordinates or custom nested EVSE objects as text/JSON based on your DB columns
                             ...(evseItem.latitude && { evseLatitude: parseFloat(evseItem.latitude) }),
                             ...(evseItem.longitude && { evseLongitude: parseFloat(evseItem.longitude) }),
-                            ...(evseItem.directions && { directions: evseItem.directions }),
+                            ...(evseItem.directions && { directions: typeof evseItem.directions === 'object' ? JSON.stringify(evseItem.directions) : evseItem.directions }),
                             ...(evseItem.images && { evseImages: JSON.stringify(evseItem.images) })
                         }
                     });
@@ -766,38 +856,34 @@ exports.updateLocationMetadata = async (req, res) => {
             }
         });
 
-        // 4. Record audit tracking entry
         const clientIp = getClientIp(req);
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'LOCATION_METADATA',
                 entityId: locationId,
-                details: `Admin enriched all required open data columns for location ID: ${locationId}`,
+                details: `Updated metadata for location ID: ${locationId}`,
                 ipAddress: clientIp,
                 userId: req.user.id
             }
         });
 
-        return res.status(200).json({ success: true, message: "All specified open data settings applied." });
+        return res.status(200).json({ success: true, message: "Open data settings updated successfully." });
     } catch (error) {
-        console.error("Portal multi-field metadata sync crash:", error);
-        return res.status(500).json({ success: false, message: "Internal server error applying complete profile update." });
+        console.error("Portal metadata update error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error applying metadata update." });
     }
 };
 
-// PATCH: Partial update for location fields
-// PATCH: Partial update for location fields
+// 10. PATCH EXTERNAL LOCATION
 exports.patchExternalLocation = async (req, res) => {
     try {
-        const { id } = req.params;
-        const locationId = parseInt(id);
+        const locationId = parseNumericId(req.params.id);
 
-        if (isNaN(locationId)) {
+        if (!locationId) {
             return res.status(400).json({ success: false, message: "Invalid location ID format." });
         }
 
-        // Destructure to separate special fields that need formatting
         const {
             directions,
             relatedLocations,
@@ -810,10 +896,8 @@ exports.patchExternalLocation = async (req, res) => {
 
         const updateData = { ...otherFields };
 
-        // Handle directions (Convert Array/Object to String if needed)
         if (directions !== undefined) {
             if (Array.isArray(directions)) {
-                // Extracts the text property if passed as [{ language: "en", text: "..." }]
                 updateData.directions = directions.length > 0 ? (directions[0].text || JSON.stringify(directions)) : null;
             } else if (typeof directions === 'object' && directions !== null) {
                 updateData.directions = directions.text || JSON.stringify(directions);
@@ -822,7 +906,6 @@ exports.patchExternalLocation = async (req, res) => {
             }
         }
 
-        // Stringify JSON structures if provided as Objects/Arrays
         if (relatedLocations !== undefined) {
             updateData.relatedLocations = typeof relatedLocations === 'object' ? JSON.stringify(relatedLocations) : relatedLocations;
         }
@@ -835,7 +918,6 @@ exports.patchExternalLocation = async (req, res) => {
             updateData.energyMix = typeof energyMix === 'object' ? JSON.stringify(energyMix) : energyMix;
         }
 
-        // Ensure numbers are properly parsed for coordinates
         if (latitude !== undefined) updateData.latitude = parseFloat(latitude);
         if (longitude !== undefined) updateData.longitude = parseFloat(longitude);
 
@@ -855,19 +937,18 @@ exports.patchExternalLocation = async (req, res) => {
     }
 };
 
-// PATCH: Comprehensive update for EVSE hardware and nested connectors
+// 11. PATCH EXTERNAL EVSE
 exports.patchExternalEvse = async (req, res) => {
     try {
         const { locationId, evseId } = req.params;
-
-        // 1. Find the target ChargePoint record
-        const parsedLocationId = !isNaN(parseInt(locationId)) ? parseInt(locationId) : null;
+        const parsedLocationId = parseNumericId(locationId);
+        const parsedEvseIdNum = parseNumericId(evseId);
 
         const existingEvse = await prisma.chargePoint.findFirst({
             where: {
                 OR: [
-                    { hardwareId: evseId },
-                    { id: !isNaN(parseInt(evseId)) ? parseInt(evseId) : -1 }
+                    { hardwareId: String(evseId) },
+                    { id: parsedEvseIdNum || -1 }
                 ],
                 ...(parsedLocationId ? { locationId: parsedLocationId } : {})
             },
@@ -878,19 +959,13 @@ exports.patchExternalEvse = async (req, res) => {
             return res.status(404).json({ success: false, message: `EVSE unit "${evseId}" not found.` });
         }
 
-        // 2. Destructure payload
         const {
-            // Fields requiring explicit database field mapping
             physical_reference,
             physicalReference,
-
-            // Read-only / unmapped OCPI fields to strip/ignore
             last_updated,
             lastUpdated,
             uid,
             evse_id,
-
-            // Fields to explicitly sanitize and format
             status,
             floor_level,
             floorLevel,
@@ -908,35 +983,29 @@ exports.patchExternalEvse = async (req, res) => {
 
         const evseUpdateData = { ...otherFields };
 
-        // Explicit physical reference mapping
         if (physical_reference !== undefined || physicalReference !== undefined) {
             evseUpdateData.physicalReference = physical_reference !== undefined ? physical_reference : physicalReference;
         }
 
-        // Status & Floor level
         if (status !== undefined) evseUpdateData.status = status;
         if (floor_level !== undefined || floorLevel !== undefined) {
             evseUpdateData.floorLevel = floor_level !== undefined ? floor_level : floorLevel;
         }
 
-        // Capabilities (Convert Array -> Comma-Separated String)
         if (capabilities !== undefined) {
             evseUpdateData.capabilities = Array.isArray(capabilities) ? capabilities.join(',') : capabilities;
         }
 
-        // Status Schedule (Convert Array/Object -> JSON String)
         if (status_schedule !== undefined || statusSchedule !== undefined) {
             const rawSchedule = status_schedule !== undefined ? status_schedule : statusSchedule;
             evseUpdateData.statusSchedule = typeof rawSchedule === 'object' ? JSON.stringify(rawSchedule) : rawSchedule;
         }
 
-        // Parking Restrictions (Convert Array -> Comma-Separated String)
         if (parking_restrictions !== undefined || parkingRestrictions !== undefined) {
             const rawRestrictions = parking_restrictions !== undefined ? parking_restrictions : parkingRestrictions;
             evseUpdateData.parkingRestrictions = Array.isArray(rawRestrictions) ? rawRestrictions.join(',') : rawRestrictions;
         }
 
-        // Directions (Extract text if passed as OCPI array [{ language: 'en', text: '...' }])
         if (directions !== undefined) {
             if (Array.isArray(directions)) {
                 evseUpdateData.directions = directions.length > 0 ? (directions[0].text || JSON.stringify(directions)) : null;
@@ -947,34 +1016,25 @@ exports.patchExternalEvse = async (req, res) => {
             }
         }
 
-        // Custom Coordinates Overrides
         if (coordinates && typeof coordinates === 'object') {
             if (coordinates.latitude !== undefined) evseUpdateData.evseLatitude = parseFloat(coordinates.latitude);
             if (coordinates.longitude !== undefined) evseUpdateData.evseLongitude = parseFloat(coordinates.longitude);
         }
 
-        // Images Array (Convert -> JSON String)
         if (images !== undefined) {
             evseUpdateData.evseImages = typeof images === 'object' ? JSON.stringify(images) : images;
         }
 
-        // 3. Update the ChargePoint Record
         await prisma.chargePoint.update({
             where: { id: existingEvse.id },
             data: evseUpdateData
         });
 
-        // 4. Update Child Connectors if included in the payload
         if (Array.isArray(connectors) && connectors.length > 0) {
             for (const conn of connectors) {
-                const connIdNum = parseInt(conn.id);
-                const isNumericId = !isNaN(connIdNum);
+                const connIdNum = parseNumericId(conn.id);
 
                 const {
-                    last_updated: connLastUpdated,
-                    lastUpdated: connLastUpdatedCamel,
-                    tariff_ids,
-                    tariffId,
                     status: connStatus,
                     standard,
                     format,
@@ -987,7 +1047,9 @@ exports.patchExternalEvse = async (req, res) => {
                     max_electric_power,
                     maxPowerKw,
                     terms_and_conditions,
-                    termsAndConditions
+                    termsAndConditions,
+                    tariff_ids,
+                    tariffId
                 } = conn;
 
                 const connectorUpdateData = {};
@@ -1000,46 +1062,36 @@ exports.patchExternalEvse = async (req, res) => {
                     connectorUpdateData.powerType = power_type !== undefined ? power_type : powerType;
                 }
 
-                // Voltage mapping
                 if (voltage !== undefined || max_voltage !== undefined) {
-                    connectorUpdateData.voltage = parseInt(voltage !== undefined ? voltage : max_voltage);
+                    connectorUpdateData.voltage = parseInt(voltage !== undefined ? voltage : max_voltage, 10);
                 }
 
-                // Amperage mapping
                 if (amperage !== undefined || max_amperage !== undefined) {
-                    connectorUpdateData.amperage = parseInt(amperage !== undefined ? amperage : max_amperage);
+                    connectorUpdateData.amperage = parseInt(amperage !== undefined ? amperage : max_amperage, 10);
                 }
 
-                // Power Kw mapping
                 if (max_electric_power !== undefined || maxPowerKw !== undefined) {
                     const rawPower = max_electric_power !== undefined ? (max_electric_power / 1000) : maxPowerKw;
                     connectorUpdateData.maxPowerKw = parseFloat(rawPower);
                 }
 
-                // Terms and Conditions mapping
                 if (terms_and_conditions !== undefined || termsAndConditions !== undefined) {
                     connectorUpdateData.termsAndConditions = terms_and_conditions !== undefined ? terms_and_conditions : termsAndConditions;
                 }
 
-                // Tariff Assignment (extract string/numeric tariff IDs safely)
                 if (tariffId !== undefined) {
-                    connectorUpdateData.tariffId = parseInt(tariffId) || null;
+                    connectorUpdateData.tariffId = parseInt(tariffId, 10) || null;
                 } else if (Array.isArray(tariff_ids) && tariff_ids.length > 0) {
-                    connectorUpdateData.tariffId = parseInt(tariff_ids[0]) || null;
+                    connectorUpdateData.tariffId = parseInt(tariff_ids[0], 10) || null;
                 }
 
                 if (Object.keys(connectorUpdateData).length > 0) {
-                    // Update either by primary key numerical ID or batch update child connectors under this chargePoint
-                    if (isNumericId) {
+                    if (connIdNum) {
                         await prisma.connector.updateMany({
-                            where: {
-                                id: connIdNum,
-                                chargePointId: existingEvse.id
-                            },
+                            where: { id: connIdNum, chargePointId: existingEvse.id },
                             data: connectorUpdateData
                         });
                     } else {
-                        // If connector ID passed as string reference, update all connectors belonging to this ChargePoint
                         await prisma.connector.updateMany({
                             where: { chargePointId: existingEvse.id },
                             data: connectorUpdateData
@@ -1049,7 +1101,6 @@ exports.patchExternalEvse = async (req, res) => {
             }
         }
 
-        // 5. Fetch refreshed record with connectors
         const fullUpdatedEvse = await prisma.chargePoint.findUnique({
             where: { id: existingEvse.id },
             include: { connectors: true }
@@ -1067,13 +1118,12 @@ exports.patchExternalEvse = async (req, res) => {
     }
 };
 
-// PATCH: Partial update for Connectors / Tariffs
+// 12. PATCH EXTERNAL CONNECTOR
 exports.patchExternalConnector = async (req, res) => {
     try {
-        const { connectorId } = req.params;
-        const parsedConnectorId = parseInt(connectorId);
+        const parsedConnectorId = parseNumericId(req.params.connectorId);
 
-        if (isNaN(parsedConnectorId)) {
+        if (!parsedConnectorId) {
             return res.status(400).json({ success: false, message: "Invalid connector ID format." });
         }
 
@@ -1081,19 +1131,16 @@ exports.patchExternalConnector = async (req, res) => {
 
         const updateData = { ...otherFields };
 
-        // Handle Connector Status
         if (status !== undefined) {
             updateData.status = status;
         }
 
-        // Handle tariff assignment (supports both 'tariffId': 5 or 'tariff_ids': ["5"])
         if (tariffId !== undefined) {
-            updateData.tariffId = parseInt(tariffId);
+            updateData.tariffId = parseInt(tariffId, 10);
         } else if (Array.isArray(tariff_ids) && tariff_ids.length > 0) {
-            updateData.tariffId = parseInt(tariff_ids[0]);
+            updateData.tariffId = parseInt(tariff_ids[0], 10);
         }
 
-        // Handle Power Kw
         if (maxPowerKw !== undefined) updateData.maxPowerKw = parseFloat(maxPowerKw);
         if (max_power_kw !== undefined) updateData.maxPowerKw = parseFloat(max_power_kw);
 
@@ -1110,5 +1157,28 @@ exports.patchExternalConnector = async (req, res) => {
     } catch (error) {
         console.error("Delta connector update error:", error);
         return res.status(500).json({ success: false, message: "Failed to apply connector update." });
+    }
+};
+
+// GET SYSTEM RATE LIMITER TELEMETRY & CONFIGURATION STATUS
+exports.getRateLimitTelemetry = async (req, res) => {
+    try {
+        const config = await prisma.systemConfig.findFirst();
+
+        res.json({
+            success: true,
+            data: {
+                rateLimitingEnabled: config?.rateLimitingEnabled ?? true,
+                feedRateLimitMax: config?.feedRateLimitMax || 100,
+                feedRateLimitWindow: config?.feedRateLimitWindow || 300, // Duration in seconds
+                lastUpdated: config?.updatedAt || new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error("Failed to query rate limit telemetry:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch active rate limiter telemetry parameters."
+        });
     }
 };

@@ -4,14 +4,11 @@ const prisma = new PrismaClient();
 /**
  * Intercepts public open data locations feed requests if blocked by Super Admin
  */
-exports.checkLocationsGate = async (req, res, next) => {
+const checkLocationsGate = async (req, res, next) => {
     try {
-        // Fetch the global system setting matrix configuration row (Record #1)
-        const config = await prisma.systemConfig.findUnique({
-            where: { id: 1 }
-        });
+        // Fetch active system config using findFirst() to avoid ID hardcoding
+        const config = await prisma.systemConfig.findFirst();
 
-        // If the configuration row exists and the locations pipeline flag is toggled on
         if (config && config.locationsBlocked) {
             return res.status(503).json({
                 name: "MAINTENANCE_PAUSED",
@@ -20,11 +17,9 @@ exports.checkLocationsGate = async (req, res, next) => {
             });
         }
 
-        // Configuration is clean, proceed down to the location controller execution
         next();
     } catch (error) {
         console.error("Locations maintenance gate validation failure:", error);
-        // Fallback safety step: default to passing the request through if configuration checks error out
         next();
     }
 };
@@ -32,11 +27,9 @@ exports.checkLocationsGate = async (req, res, next) => {
 /**
  * Intercepts public open data tariffs feed requests if blocked by Super Admin
  */
-exports.checkTariffsGate = async (req, res, next) => {
+const checkTariffsGate = async (req, res, next) => {
     try {
-        const config = await prisma.systemConfig.findUnique({
-            where: { id: 1 }
-        });
+        const config = await prisma.systemConfig.findFirst();
 
         if (config && config.tariffsBlocked) {
             return res.status(503).json({
@@ -56,14 +49,12 @@ exports.checkTariffsGate = async (req, res, next) => {
 /**
  * Intercepts general workspace operations (Operator Portals / Developer Keys Management) if blocked
  */
-exports.checkPortalGate = async (req, res, next) => {
+const checkPortalGate = async (req, res, next) => {
     try {
-        const config = await prisma.systemConfig.findUnique({
-            where: { id: 1 }
-        });
+        const config = await prisma.systemConfig.findFirst();
 
         if (config && config.portalBlocked) {
-            // Super Admins must always bypass maintenance intercepts so they don't lock themselves out of the portal
+            // Super Admins bypass maintenance intercepts so they don't lock themselves out
             if (req.user && req.user.role === 'SUPER_ADMIN') {
                 return next();
             }
@@ -79,4 +70,10 @@ exports.checkPortalGate = async (req, res, next) => {
         console.error("Portal maintenance gate validation failure:", error);
         next();
     }
+};
+
+module.exports = {
+    checkLocationsGate,
+    checkTariffsGate,
+    checkPortalGate
 };

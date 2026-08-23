@@ -1,20 +1,26 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// 1. GET ALL: Tenant-isolated lookup stream
+// Helper Extraction Module: Pulls real client IP safely behind proxies
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for']
+        ? req.headers['x-forwarded-for'].split(',')[0].trim()
+        : req.ip || req.socket?.remoteAddress || '127.0.0.1';
+};
+
+// 1. GET ALL TARIFFS
 exports.getAllTariffs = async (req, res) => {
     try {
         const { role, companyId } = req.user;
         const isSuperAdmin = role === 'SUPER_ADMIN';
 
-        // Enforce strict multi-tenant containment rules
-        const whereClause = isSuperAdmin ? {} : { companyId: parseInt(companyId) };
+        const whereClause = isSuperAdmin ? {} : { companyId: parseInt(companyId, 10) };
 
         const tariffs = await prisma.tariff.findMany({
             where: whereClause,
             include: {
                 company: {
-                    select: { name: true }
+                    select: { id: true, name: true, operatorReferenceId: true }
                 },
                 _count: {
                     select: { connectors: true }
@@ -23,27 +29,40 @@ exports.getAllTariffs = async (req, res) => {
             orderBy: { id: 'desc' }
         });
 
-        res.json({ success: true, data: tariffs });
+        const mappedTariffs = tariffs.map((t) => ({
+            id: t.id,
+            name: t.name,
+            pricePerKwh: t.pricePerKwh,
+            currency: t.currency || 'GBP',
+            companyId: t.companyId,
+            companyName: t.company?.name || 'Independent Operator',
+            operatorReferenceId: t.company?.operatorReferenceId || null,
+            connectorsCount: t._count?.connectors || 0,
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt
+        }));
+
+        res.json({ success: true, data: mappedTariffs });
     } catch (error) {
         console.error("Failed to fetch multi-tenant tariff matrix:", error);
         res.status(500).json({ success: false, message: "Failed to fetch tariffs" });
     }
 };
 
-// 2. CREATE: Auto-assigns or verifies company ownership bounds
+// 2. CREATE A TARIFF
 exports.createTariff = async (req, res) => {
     try {
-        const { role, companyId: userCompanyId } = req.user;
+        const { role, companyId: userCompanyId, id: userId } = req.user;
         const { name, pricePerKwh, currency, companyId } = req.body;
+        const clientIp = getClientIp(req);
 
-        if (!name || pricePerKwh === undefined) {
+        if (!name || pricePerKwh === undefined || pricePerKwh === '') {
             return res.status(400).json({ success: false, message: "Missing required price configuration fields." });
         }
 
-        // Super Admins specify target tenant; Company Admins are strictly bound to their own session id
-        const targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(companyId) : parseInt(userCompanyId);
+        const targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(companyId, 10) : parseInt(userCompanyId, 10);
 
-        if (!targetCompanyId) {
+        if (!targetCompanyId || isNaN(targetCompanyId)) {
             return res.status(400).json({ success: false, message: "Tariff plan must be assigned to an active company tenant." });
         }
 
@@ -51,8 +70,19 @@ exports.createTariff = async (req, res) => {
             data: {
                 name,
                 pricePerKwh: parseFloat(pricePerKwh),
-                currency: currency || 'GBP', // Compliance tracking marker (UK Public Charge Point Regulations 2023)
+                currency: currency || 'GBP',
                 companyId: targetCompanyId
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'CREATE',
+                entity: 'TARIFF',
+                entityId: tariff.id,
+                details: `Created tariff plan: "${name}" (${pricePerKwh} ${tariff.currency}/kWh)`,
+                ipAddress: clientIp,
+                userId: userId
             }
         });
 
@@ -63,23 +93,22 @@ exports.createTariff = async (req, res) => {
     }
 };
 
-// 3. UPDATE: Safe contextual modification validation check
+// 3. UPDATE AN EXISTING TARIFF
 exports.updateTariff = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role, companyId } = req.user;
+        const { role, companyId, id: userId } = req.user;
         const { name, pricePerKwh, currency } = req.body;
-        const tariffIdInt = parseInt(id);
+        const tariffIdInt = parseInt(id, 10);
+        const clientIp = getClientIp(req);
 
-        // Find target tariff to verify ownership before applying modifications
         const baselineTariff = await prisma.tariff.findUnique({ where: { id: tariffIdInt } });
 
         if (!baselineTariff) {
             return res.status(404).json({ success: false, message: "Target tariff plan not found." });
         }
 
-        // Prevent cross-tenant data tampering attempts
-        if (role !== 'SUPER_ADMIN' && baselineTariff.companyId !== parseInt(companyId)) {
+        if (role !== 'SUPER_ADMIN' && baselineTariff.companyId !== parseInt(companyId, 10)) {
             return res.status(403).json({ success: false, message: "Access Denied: Cannot modify infrastructure out of tenant scope bounds." });
         }
 
@@ -87,8 +116,19 @@ exports.updateTariff = async (req, res) => {
             where: { id: tariffIdInt },
             data: {
                 ...(name && { name }),
-                ...(pricePerKwh !== undefined && { pricePerKwh: parseFloat(pricePerKwh) }),
+                ...(pricePerKwh !== undefined && pricePerKwh !== '' && { pricePerKwh: parseFloat(pricePerKwh) }),
                 ...(currency && { currency })
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'UPDATE',
+                entity: 'TARIFF',
+                entityId: updatedTariff.id,
+                details: `Updated tariff plan: "${updatedTariff.name}" (${updatedTariff.pricePerKwh} ${updatedTariff.currency}/kWh)`,
+                ipAddress: clientIp,
+                userId: userId
             }
         });
 
@@ -99,12 +139,13 @@ exports.updateTariff = async (req, res) => {
     }
 };
 
-// 4. DELETE: Relational tracking check before purge execution
+// 4. DELETE A TARIFF
 exports.deleteTariff = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role, companyId } = req.user;
-        const tariffIdInt = parseInt(id);
+        const { role, companyId, id: userId } = req.user;
+        const tariffIdInt = parseInt(id, 10);
+        const clientIp = getClientIp(req);
 
         const baselineTariff = await prisma.tariff.findUnique({ where: { id: tariffIdInt } });
 
@@ -112,25 +153,35 @@ exports.deleteTariff = async (req, res) => {
             return res.status(404).json({ success: false, message: "Target tariff plan not found." });
         }
 
-        // Ownership enforcement check
-        if (role !== 'SUPER_ADMIN' && baselineTariff.companyId !== parseInt(companyId)) {
+        if (role !== 'SUPER_ADMIN' && baselineTariff.companyId !== parseInt(companyId, 10)) {
             return res.status(403).json({ success: false, message: "Access Denied: Cannot delete infrastructure out of tenant scope bounds." });
         }
 
-        await prisma.tariff.delete({
-            where: { id: tariffIdInt }
+        await prisma.$transaction(async (tx) => {
+            await tx.connector.updateMany({
+                where: { tariffId: tariffIdInt },
+                data: { tariffId: null }
+            });
+
+            await tx.tariff.delete({
+                where: { id: tariffIdInt }
+            });
         });
 
-        res.json({ success: true, message: "Tariff plan successfully removed from corporate records." });
+        await prisma.auditLog.create({
+            data: {
+                action: 'DELETE',
+                entity: 'TARIFF',
+                entityId: tariffIdInt,
+                details: `Deleted tariff plan: "${baselineTariff.name}" and unlinked dependent connectors.`,
+                ipAddress: clientIp,
+                userId: userId
+            }
+        });
+
+        res.json({ success: true, message: "Tariff plan successfully removed and unlinked from connectors." });
     } catch (error) {
         console.error("Tariff deletion sequence failed:", error);
-        // Intercept database foreign constraint blocks gracefully
-        if (error.code === 'P2003') {
-            return res.status(400).json({
-                success: false,
-                message: "Cannot delete tariff plan. It is actively linked to deployed and operational hardware connector nodes."
-            });
-        }
         res.status(500).json({ success: false, message: "Failed to delete tariff" });
     }
 };

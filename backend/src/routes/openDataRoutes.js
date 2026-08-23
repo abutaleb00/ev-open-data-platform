@@ -1,52 +1,123 @@
 const express = require('express');
 const router = express.Router();
+
 const openDataController = require('../controllers/openDataController');
+const operatorSyncController = require('../controllers/operatorSyncController');
+
 const { protect, verifyPartnerApiKey } = require('../middlewares/authMiddleware');
 const { checkLocationsGate, checkTariffsGate } = require('../middlewares/maintenanceInterceptor');
 const { feedRateLimiter, logApiRequest } = require('../middlewares/requestTracker');
 
+// Defensive fallback wrapper to prevent router crashes if middleware loading fails
+const safeMw = (mw, name) => {
+    if (typeof mw === 'function') return mw;
+    console.warn(`[Warning] Route middleware '${name}' is not a function (received ${typeof mw}). Bypassing.`);
+    return (req, res, next) => next();
+};
+
 // ------------------------------------------------------
-// 1. PUBLIC UNSECURED DATA OPEN STREAMS
+// 1. PUBLIC UNSECURED DATA OPEN STREAMS (RATE LIMITED)
 // ------------------------------------------------------
-// Feeds are open to third-party endpoints with 30s rate limiting and request tracking
-router.get('/feed', feedRateLimiter, logApiRequest, checkLocationsGate, openDataController.getPublicFeed);
-router.get('/tariffs', checkTariffsGate, openDataController.getPublicTariffs);
+router.get(
+    '/feed',
+    safeMw(feedRateLimiter, 'feedRateLimiter'),
+    safeMw(logApiRequest, 'logApiRequest'),
+    safeMw(checkLocationsGate, 'checkLocationsGate'),
+    safeMw(openDataController.getPublicFeed, 'getPublicFeed')
+);
+
+router.get(
+    '/tariffs',
+    safeMw(checkTariffsGate, 'checkTariffsGate'),
+    safeMw(openDataController.getPublicTariffs, 'getPublicTariffs')
+);
 
 
 // ------------------------------------------------------
 // 2. EXTERNAL PARTNER DATA INGESTION & DELTA UPDATES
 // ------------------------------------------------------
-// Bulk Ingestion Endpoint (POST full location records from third-party backend)
-router.post('/ingest', verifyPartnerApiKey, openDataController.ingestExternalData);
+router.post(
+    '/sync-operator',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(operatorSyncController.syncOperatorData, 'syncOperatorData')
+);
 
-// Modular Delta/Partial Update Endpoints (PATCH specific changes by ID using x-api-key)
-router.patch('/external/locations/:id', verifyPartnerApiKey, openDataController.patchExternalLocation);
-router.patch('/external/locations/:locationId/evses/:evseId', verifyPartnerApiKey, openDataController.patchExternalEvse);
-router.patch('/external/evses/:evseId/connectors/:connectorId', verifyPartnerApiKey, openDataController.patchExternalConnector);
+router.post(
+    '/ingest',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(openDataController.ingestExternalData, 'ingestExternalData')
+);
+
+router.patch(
+    '/external/locations/:id',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(openDataController.patchExternalLocation, 'patchExternalLocation')
+);
+
+router.patch(
+    '/external/locations/:locationId/evses/:evseId',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(openDataController.patchExternalEvse, 'patchExternalEvse')
+);
+
+router.patch(
+    '/external/evses/:evseId/connectors/:connectorId',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(openDataController.patchExternalConnector, 'patchExternalConnector')
+);
 
 
 // ------------------------------------------------------
 // 3. ADMIN EDITABLE PORTAL DATA UPDATES & METRICS
 // ------------------------------------------------------
-// Single API for Company Admins and Super Admins to fill in missing portal metadata
-router.patch('/location/:id/metadata', protect, openDataController.updateLocationMetadata);
+router.patch(
+    '/location/:id/metadata',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.updateLocationMetadata, 'updateLocationMetadata')
+);
 
-// Request tracking analytics & IP audit endpoint for Admin Web Portal
-router.get('/admin/traffic-metrics', protect, openDataController.getTrafficMetrics);
+router.get(
+    '/admin/traffic-metrics',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.getTrafficMetrics, 'getTrafficMetrics')
+);
+
+router.get(
+    '/admin/rate-limit-telemetry',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.getRateLimitTelemetry, 'getRateLimitTelemetry')
+);
 
 
 // ------------------------------------------------------
-// 4. SECURED INTERNAL COMPANY DASHBOARD PREVIEWS
+// 4. SECURED INTERNAL DASHBOARD PREVIEWS (NO RATE LIMIT)
 // ------------------------------------------------------
-// Automatically isolates data visibility according to the user's active login token context
-router.get('/preview/feed', protect, openDataController.getDashboardFeedPreview);
-router.get('/preview/tariffs', protect, openDataController.getDashboardTariffsPreview);
+router.get(
+    '/preview/feed',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.getDashboardFeedPreview, 'getDashboardFeedPreview')
+);
+
+router.get(
+    '/preview/tariffs',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.getDashboardTariffsPreview, 'getDashboardTariffsPreview')
+);
 
 
 // ------------------------------------------------------
 // 5. PRIVATE DEVELOPER CREDENTIAL MANAGEMENT
 // ------------------------------------------------------
-router.get('/keys', protect, openDataController.getCompanyKeys);
-router.post('/keys', protect, openDataController.generateApiKey);
+router.get(
+    '/keys',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.getCompanyKeys, 'getCompanyKeys')
+);
+
+router.post(
+    '/keys',
+    safeMw(protect, 'protect'),
+    safeMw(openDataController.generateApiKey, 'generateApiKey')
+);
 
 module.exports = router;

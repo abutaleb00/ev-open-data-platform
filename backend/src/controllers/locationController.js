@@ -8,9 +8,10 @@ const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
 };
 
-// Helper function to extract a file name from a public URL and purge it from the server's hard drive
+// Helper function to extract a file name from a public URL and purge it from the server's disk
 const purgePhysicalFile = (url) => {
     try {
+        if (!url) return false;
         const filename = url.split('/uploads/locations/')[1];
         if (filename) {
             const physicalPath = path.join(__dirname, '../../uploads/locations', filename);
@@ -25,7 +26,17 @@ const purgePhysicalFile = (url) => {
     return false;
 };
 
-// Get all locations (Filtered by role, searchable by text query, and filterable by approval status)
+// Safe JSON parser helper
+const safeJsonParse = (str) => {
+    if (!str) return null;
+    try {
+        return JSON.parse(str);
+    } catch (_) {
+        return str;
+    }
+};
+
+// 1. GET ALL LOCATIONS (Supports Role-based filtering, Search, Status, and 1:1 OCPI Payload Parsing)
 exports.getAllLocations = async (req, res) => {
     try {
         const { role, companyId } = req.user;
@@ -33,14 +44,14 @@ exports.getAllLocations = async (req, res) => {
         const isSuperAdmin = role === 'SUPER_ADMIN';
 
         // 1. Core Role-Based Boundary Guard
-        const whereClause = isSuperAdmin ? {} : { companyId: parseInt(companyId) };
+        const whereClause = isSuperAdmin ? {} : { companyId: parseInt(companyId, 10) };
 
         // 2. Add Status Filter if provided ('approved' or 'pending')
         if (status) {
             whereClause.isApproved = status === 'approved';
         }
 
-        // 3. Add Dynamic Text Search across Company Name, Postcode, and Location Name
+        // 3. Add Dynamic Text Search across Company Name, Postcode, Location Name, and Location UID
         if (search && search.trim() !== '') {
             const searchString = search.trim();
 
@@ -51,6 +62,8 @@ exports.getAllLocations = async (req, res) => {
                         { name: { contains: searchString } },
                         { postcode: { contains: searchString } },
                         { city: { contains: searchString } },
+                        { locationUid: { contains: searchString } },
+                        { operatorReferenceId: { contains: searchString } },
                         {
                             company: {
                                 name: { contains: searchString }
@@ -65,10 +78,15 @@ exports.getAllLocations = async (req, res) => {
             where: whereClause,
             include: {
                 company: {
-                    select: { name: true }
+                    select: { id: true, name: true, operatorReferenceId: true }
                 },
                 media: {
-                    select: { id: true, url: true, type: true }
+                    select: { id: true, url: true, type: true, category: true }
+                },
+                chargePoints: {
+                    include: {
+                        connectors: true
+                    }
                 },
                 _count: {
                     select: { chargePoints: true }
@@ -77,41 +95,117 @@ exports.getAllLocations = async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        res.json({ success: true, data: locations });
+        // Map and parse stored JSON attributes cleanly for UI & API consumption
+        const mappedLocations = locations.map((loc) => {
+            const parsedOperator = safeJsonParse(loc.operatorData);
+            const parsedOwner = safeJsonParse(loc.ownerData);
+            const parsedSuboperator = safeJsonParse(loc.suboperatorData);
+            const parsedOpeningTimes = safeJsonParse(loc.openingTimesData);
+            const parsedDirections = safeJsonParse(loc.directions);
+            const parsedRelatedLocations = safeJsonParse(loc.relatedLocations);
+            const parsedPublishAllowedTo = safeJsonParse(loc.publishAllowedTo);
+            const parsedEnergyMix = safeJsonParse(loc.energyMix);
+
+            return {
+                id: loc.id,
+                locationUid: loc.locationUid || `loc_${loc.id}`,
+                name: loc.name,
+                address: loc.address,
+                postcode: loc.postcode,
+                city: loc.city,
+                state: loc.state,
+                countryCode: loc.countryCode,
+                partyId: loc.partyId,
+                countryISO: loc.countryISO,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                parkingType: loc.parkingType,
+                timeZone: loc.timeZone,
+                amenities: loc.amenities ? loc.amenities.split(',').map(a => a.trim()) : [],
+                facilities: loc.amenities ? loc.amenities.split(',').map(a => a.trim()) : [],
+                chargingWhenClosed: loc.chargingWhenClosed,
+                publish: loc.publish,
+                isApproved: loc.isApproved,
+                rejectionNote: loc.rejectionNote,
+                createdAt: loc.createdAt,
+                updatedAt: loc.updatedAt,
+                companyId: loc.companyId,
+                companyName: loc.company?.name || "Independent Operator",
+                operatorReferenceId: loc.operatorReferenceId || loc.company?.operatorReferenceId || null,
+
+                // Rich OCPI JSON Structures
+                operator: parsedOperator || { name: loc.company?.name || "Independent Operator" },
+                suboperator: parsedSuboperator,
+                owner: parsedOwner,
+                opening_times: parsedOpeningTimes,
+                directions: Array.isArray(parsedDirections) ? parsedDirections : [],
+                related_locations: parsedRelatedLocations,
+                publish_allowed_to: parsedPublishAllowedTo,
+                energy_mix: parsedEnergyMix,
+
+                // Media Assets & Infrastructure Metrics
+                images: loc.media.map(m => ({
+                    id: m.id,
+                    url: m.url,
+                    category: m.category || "ENTRANCE",
+                    type: m.type
+                })),
+                chargePointsCount: loc._count?.chargePoints || 0,
+                chargePoints: loc.chargePoints.map(cp => ({
+                    id: cp.id,
+                    hardwareId: cp.hardwareId,
+                    evseUid: cp.evseUid,
+                    status: cp.status,
+                    capabilities: cp.capabilities ? cp.capabilities.split(',').map(c => c.trim()) : [],
+                    connectorsCount: cp.connectors?.length || 0,
+                    connectors: cp.connectors.map(conn => ({
+                        id: conn.id,
+                        connectorUid: conn.connectorUid,
+                        standard: conn.standard,
+                        format: conn.format,
+                        powerType: conn.powerType,
+                        maxPowerKw: conn.maxPowerKw,
+                        voltage: conn.voltage,
+                        amperage: conn.amperage,
+                        tariffIds: safeJsonParse(conn.tariffIdsJson) || []
+                    }))
+                }))
+            };
+        });
+
+        res.json({ success: true, data: mappedLocations });
     } catch (error) {
         console.error("Filter matrix failure:", error);
         res.status(500).json({ success: false, message: "Failed to query searchable locations registry." });
     }
 };
 
-// Create a new location with structured OCPI parameters and multi-image filesystem uploads
+// 2. CREATE A NEW LOCATION
 exports.createLocation = async (req, res) => {
     try {
         const {
             name, address, postcode, latitude, longitude, amenities, companyId,
-            city, state, countryCode, partyId, countryISO, parkingType, timeZone
+            city, state, countryCode, partyId, countryISO, parkingType, timeZone,
+            operatorData, suboperatorData, ownerData, openingTimesData, directions
         } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const clientIp = getClientIp(req);
 
-        // Force Company Admins to only create locations for their own company context
-        const targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(companyId) : parseInt(userCompanyId);
+        const targetCompanyId = role === 'SUPER_ADMIN' ? parseInt(companyId, 10) : parseInt(userCompanyId, 10);
 
         if (!targetCompanyId) {
-            return res.status(400).json({ success: false, message: "A valid company context id must be resolved to create a location entry." });
+            return res.status(400).json({ success: false, message: "A valid company context ID is required." });
         }
 
-        // --- GEOSPATIAL VECTOR GUARDRAILS ---
         const lat = parseFloat(latitude);
         const lng = parseFloat(longitude);
         if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
             return res.status(400).json({
                 success: false,
-                message: "Geospatial vector values fall outside valid global boundaries (Latitude: -90 to 90, Longitude: -180 to 180)."
+                message: "Latitude (-90 to 90) or Longitude (-180 to 180) values fall outside valid global coordinates."
             });
         }
 
-        // Run sequential insertions inside an atomic database write loop transaction container
         const result = await prisma.$transaction(async (tx) => {
             const location = await tx.location.create({
                 data: {
@@ -120,27 +214,32 @@ exports.createLocation = async (req, res) => {
                     postcode,
                     latitude: lat,
                     longitude: lng,
-                    amenities,
+                    amenities: Array.isArray(amenities) ? amenities.join(',') : amenities || null,
                     companyId: targetCompanyId,
-
-                    // --- OCPI ATTRIBUTES ---
                     city: city || "Unknown City",
                     state: state || null,
                     countryCode: countryCode || "GB",
-                    partyId: partyId || "CEV",
-                    countryISO: countryISO || "GBR",
-                    parkingType: parkingType || "UNKNOWN",
-                    timeZone: timeZone || "Europe/London"
+                    partyId: partyId || "Ada",
+                    countryISO: countryISO || "United Kingdom",
+                    parkingType: parkingType || "ON_STREET",
+                    timeZone: timeZone || "Europe/London",
+
+                    // Preserve raw JSON payloads if provided
+                    operatorData: typeof operatorData === 'object' ? JSON.stringify(operatorData) : operatorData || null,
+                    suboperatorData: typeof suboperatorData === 'object' ? JSON.stringify(suboperatorData) : suboperatorData || null,
+                    ownerData: typeof ownerData === 'object' ? JSON.stringify(ownerData) : ownerData || null,
+                    openingTimesData: typeof openingTimesData === 'object' ? JSON.stringify(openingTimesData) : openingTimesData || null,
+                    directions: typeof directions === 'object' ? JSON.stringify(directions) : directions || null,
+                    isApproved: true
                 }
             });
 
-            // Map and store local file reference pointers if present in multi-part payload request
             if (req.files && req.files.length > 0) {
-                // FIXED: Normalizes host parsing dynamically using environment routing buffers
                 const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
                 const mediaData = req.files.map(file => ({
                     url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
                     type: file.mimetype,
+                    category: "ENTRANCE",
                     locationId: location.id
                 }));
 
@@ -150,37 +249,36 @@ exports.createLocation = async (req, res) => {
             return location;
         });
 
-        // Log this structural action inside our audit engine ledger along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'LOCATION',
                 entityId: result.id,
-                details: `Created new OCPI compliant location: "${name}" with attached images.`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                details: `Created new location entry: "${name}".`,
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
         res.status(201).json({ success: true, data: result });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "Failed to create infrastructure location point entry." });
+        console.error("Create location error:", error);
+        res.status(500).json({ success: false, message: "Failed to create location entry." });
     }
 };
 
-// Update an existing location including its mutable OCPI parameters and media storage attachments
+// 3. UPDATE AN EXISTING LOCATION
 exports.updateLocation = async (req, res) => {
     try {
         const { id } = req.params;
         const {
             name, address, postcode, latitude, longitude, amenities, isApproved,
-            city, state, countryCode, partyId, countryISO, parkingType, timeZone
+            city, state, countryCode, partyId, countryISO, parkingType, timeZone,
+            chargingWhenClosed, operatorData, suboperatorData, ownerData, openingTimesData, directions
         } = req.body;
         const userId = req.user.id;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const clientIp = getClientIp(req);
 
-        // --- SANITIZE MULTIPART TEXT STRINGS TO NATIVE TYPES ---
         let parsedIsApproved = undefined;
         if (isApproved !== undefined) {
             parsedIsApproved = isApproved === 'true' || isApproved === true;
@@ -190,7 +288,7 @@ exports.updateLocation = async (req, res) => {
             ...(name && { name }),
             ...(address && { address }),
             ...(postcode && { postcode }),
-            ...(amenities && { amenities }),
+            ...(amenities !== undefined && { amenities: Array.isArray(amenities) ? amenities.join(',') : amenities }),
             ...(parsedIsApproved !== undefined && { isApproved: parsedIsApproved }),
             ...(city && { city }),
             ...(state !== undefined && { state }),
@@ -198,10 +296,16 @@ exports.updateLocation = async (req, res) => {
             ...(partyId && { partyId }),
             ...(countryISO && { countryISO }),
             ...(parkingType && { parkingType }),
-            ...(timeZone && { timeZone })
+            ...(timeZone && { timeZone }),
+            ...(chargingWhenClosed !== undefined && { chargingWhenClosed: Boolean(chargingWhenClosed) }),
+
+            ...(operatorData !== undefined && { operatorData: typeof operatorData === 'object' ? JSON.stringify(operatorData) : operatorData }),
+            ...(suboperatorData !== undefined && { suboperatorData: typeof suboperatorData === 'object' ? JSON.stringify(suboperatorData) : suboperatorData }),
+            ...(ownerData !== undefined && { ownerData: typeof ownerData === 'object' ? JSON.stringify(ownerData) : ownerData }),
+            ...(openingTimesData !== undefined && { openingTimesData: typeof openingTimesData === 'object' ? JSON.stringify(openingTimesData) : openingTimesData }),
+            ...(directions !== undefined && { directions: typeof directions === 'object' ? JSON.stringify(directions) : directions })
         };
 
-        // --- GEOSPATIAL VECTOR GUARDRAILS ---
         if (latitude !== undefined || longitude !== undefined) {
             if (latitude) updateData.latitude = parseFloat(latitude);
             if (longitude) updateData.longitude = parseFloat(longitude);
@@ -213,141 +317,137 @@ exports.updateLocation = async (req, res) => {
                 (finalLng !== undefined && (isNaN(finalLng) || finalLng < -180 || finalLng > 180))) {
                 return res.status(400).json({
                     success: false,
-                    message: "Provided geospatial parameters violate mathematical map projection limits."
+                    message: "Geospatial parameters violate projection bounds."
                 });
             }
         }
 
         const location = await prisma.location.update({
-            where: { id: parseInt(id) },
+            where: { id: parseInt(id, 10) },
             data: updateData
         });
 
-        // Process file attachments appended during modifications
         if (req.files && req.files.length > 0) {
-            // FIXED: Normalizes host parsing dynamically using environment routing buffers
             const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
             const mediaData = req.files.map(file => ({
                 url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
                 type: file.mimetype,
+                category: "ENTRANCE",
                 locationId: location.id
             }));
 
             await prisma.media.createMany({ data: mediaData });
         }
 
-        // Trace change log inside Audit Ledger records along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'LOCATION',
                 entityId: location.id,
-                details: `Updated location properties and compliance parameters for: "${location.name}"`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                details: `Updated properties for location: "${location.name}"`,
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
         res.json({ success: true, data: location });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "Failed to apply profile changes to target infrastructure point." });
+        console.error("Update location error:", error);
+        res.status(500).json({ success: false, message: "Failed to apply changes to target location." });
     }
 };
 
-// Delete an existing location safety gate checks with disk-wiping cascades
+// 4. DELETE A LOCATION (Cascading Clean Up)
 exports.deleteLocation = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
-        const parsedId = parseInt(id);
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const parsedId = parseInt(id, 10);
+        const clientIp = getClientIp(req);
 
-        // Fetch location details first to verify existence and extract dependent media
         const locationToDelete = await prisma.location.findUnique({
             where: { id: parsedId },
-            select: {
-                name: true,
+            include: {
                 media: { select: { url: true } },
-                _count: { select: { chargePoints: true } }
+                chargePoints: { select: { id: true } }
             }
         });
 
         if (!locationToDelete) {
-            return res.status(404).json({ success: false, message: "Target infrastructure entity index not found." });
+            return res.status(404).json({ success: false, message: "Target location entry not found." });
         }
 
-        // Force a dependency gate block if active hardware profiles are still tied to it
-        if (locationToDelete._count.chargePoints > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Cannot isolate and delete location. Active hardware charge point deployment entries are still bound to this location point resource."
-            });
-        }
+        // Execute Cascading Purge inside a Transaction
+        await prisma.$transaction(async (tx) => {
+            const chargePointIds = locationToDelete.chargePoints.map(cp => cp.id);
 
-        // --- DISK-CLEANSING CASCADE ---
-        if (locationToDelete.media && locationToDelete.media.length > 0) {
-            locationToDelete.media.forEach(mediaItem => {
-                purgePhysicalFile(mediaItem.url);
-            });
-        }
+            if (chargePointIds.length > 0) {
+                const connectors = await tx.connector.findMany({
+                    where: { chargePointId: { in: chargePointIds } },
+                    select: { id: true }
+                });
+                const connectorIds = connectors.map(c => c.id);
 
-        // Drop the location.
-        await prisma.location.delete({
-            where: { id: parsedId }
+                if (connectorIds.length > 0) {
+                    await tx.session.deleteMany({ where: { connectorId: { in: connectorIds } } });
+                    await tx.connector.deleteMany({ where: { chargePointId: { in: chargePointIds } } });
+                }
+
+                await tx.media.deleteMany({ where: { chargePointId: { in: chargePointIds } } });
+                await tx.chargePoint.deleteMany({ where: { locationId: parsedId } });
+            }
+
+            if (locationToDelete.media && locationToDelete.media.length > 0) {
+                locationToDelete.media.forEach(mediaItem => {
+                    purgePhysicalFile(mediaItem.url);
+                });
+                await tx.media.deleteMany({ where: { locationId: parsedId } });
+            }
+
+            await tx.location.delete({ where: { id: parsedId } });
         });
 
-        // Log destruction event along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'LOCATION',
                 entityId: parsedId,
-                details: `Permanently removed location node registry item: "${locationToDelete.name}" and purged all associated server disk assets.`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                details: `Deleted location node: "${locationToDelete.name}" and purged associated media/hardware nodes.`,
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
-        res.json({ success: true, message: "Location structure and associated disk media assets deleted successfully." });
+        res.json({ success: true, message: "Location and associated infrastructure deleted successfully." });
     } catch (error) {
-        console.error(error);
-        if (error.code === 'P2003') {
-            return res.status(400).json({
-                success: false,
-                message: "Cannot isolate and delete location. Active foreign key constraints exist on reference tables."
-            });
-        }
-        res.status(500).json({ success: false, message: "Failed to safely erase location endpoint trace from platform database." });
+        console.error("Delete location error:", error);
+        res.status(500).json({ success: false, message: "Failed to erase location from platform records." });
     }
 };
 
-// Delete an individual image file and its database reference node
+// 5. DELETE A SINGLE LOCATION IMAGE
 exports.deleteLocationImage = async (req, res) => {
     try {
         const { mediaId } = req.params;
-        const parsedMediaId = parseInt(mediaId);
+        const parsedMediaId = parseInt(mediaId, 10);
 
-        // Fetch the file entry to get its URL string path
         const mediaItem = await prisma.media.findUnique({
             where: { id: parsedMediaId }
         });
 
         if (!mediaItem) {
-            return res.status(404).json({ success: false, message: "Target media reference asset not found." });
+            return res.status(404).json({ success: false, message: "Target media asset not found." });
         }
 
-        // Purge file from local server storage disk using our helper function
         purgePhysicalFile(mediaItem.url);
 
-        // Drop the row entry from Prisma
         await prisma.media.delete({
             where: { id: parsedMediaId }
         });
 
-        res.json({ success: true, message: "Media file stripped and erased from storage successfully." });
+        res.json({ success: true, message: "Media file deleted successfully." });
     } catch (error) {
         console.error("Image deletion execution error:", error);
-        res.status(500).json({ success: false, message: "Failed to erase target resource file trace." });
+        res.status(500).json({ success: false, message: "Failed to erase target media asset." });
     }
 };

@@ -1,15 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
 };
 
-// 1. READ ALL: Fetch multi-tenant companies with dynamically rolled-up hardware counts
+// 1. READ ALL: Return company registry enriched with operator logo, website, and owner metadata
 exports.getAllCompanies = async (req, res) => {
     try {
-        // Fetch companies along with their locations and the count of charge points per location
         const companies = await prisma.company.findMany({
             include: {
                 _count: {
@@ -17,6 +15,8 @@ exports.getAllCompanies = async (req, res) => {
                 },
                 locations: {
                     select: {
+                        operatorData: true,
+                        ownerData: true,
                         _count: {
                             select: { chargePoints: true }
                         }
@@ -26,16 +26,43 @@ exports.getAllCompanies = async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // Map through the results to calculate the total charge points for each company
         const formattedCompanies = companies.map(company => {
-            const totalChargePoints = company.locations.reduce((sum, loc) => sum + loc._count.chargePoints, 0);
+            const totalChargePoints = company.locations.reduce(
+                (sum, loc) => sum + (loc._count?.chargePoints || 0),
+                0
+            );
+
+            let operatorDetails = null;
+            let ownerDetails = null;
+            let realOperatorName = company.name;
+
+            if (company.locations && company.locations.length > 0) {
+                const firstLoc = company.locations[0];
+                try {
+                    if (firstLoc.operatorData) {
+                        operatorDetails = JSON.parse(firstLoc.operatorData);
+                        if (operatorDetails?.name) realOperatorName = operatorDetails.name;
+                    }
+                    if (firstLoc.ownerData) {
+                        ownerDetails = JSON.parse(firstLoc.ownerData);
+                    }
+                } catch (_) { }
+            }
 
             return {
                 id: company.id,
-                name: company.name,
+                name: realOperatorName,
+                operatorReferenceId: company.operatorReferenceId,
                 contactEmail: company.contactEmail,
-                status: company.status, 
+                status: company.status,
                 createdAt: company.createdAt,
+
+                // Enriched metadata from payload
+                website: operatorDetails?.website || null,
+                logo: operatorDetails?.logo || null,
+                operator: operatorDetails,
+                owner: ownerDetails,
+
                 _count: {
                     users: company._count.users,
                     locations: company._count.locations,
@@ -51,11 +78,11 @@ exports.getAllCompanies = async (req, res) => {
     }
 };
 
-// 2. ADMINISTRATIVE CREATE: Manually provision a brand new company profile container
+// 2. ADMINISTRATIVE CREATE
 exports.createCompany = async (req, res) => {
     try {
-        const { name, contactEmail } = req.body;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const { name, contactEmail, operatorReferenceId } = req.body;
+        const clientIp = getClientIp(req);
 
         if (!name || !contactEmail) {
             return res.status(400).json({ success: false, message: "Missing required profile metadata parameters." });
@@ -65,18 +92,18 @@ exports.createCompany = async (req, res) => {
             data: {
                 name,
                 contactEmail,
-                status: "ACTIVE" 
+                operatorReferenceId: operatorReferenceId || null,
+                status: "ACTIVE"
             }
         });
 
-        // Log this action to the audit track ledger along with captured client IP
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'COMPANY',
                 entityId: company.id,
                 details: `Administrative creation of company container: "${name}".`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: req.user.id
             }
         });
@@ -88,16 +115,20 @@ exports.createCompany = async (req, res) => {
     }
 };
 
-// 3. ADMINISTRATIVE UPDATE: Align high-level descriptive variable configurations
+// 3. ADMINISTRATIVE UPDATE
 exports.updateCompany = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, contactEmail } = req.body;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const { name, contactEmail, operatorReferenceId } = req.body;
+        const clientIp = getClientIp(req);
 
         const company = await prisma.company.update({
-            where: { id: parseInt(id) },
-            data: { name, contactEmail }
+            where: { id: parseInt(id, 10) },
+            data: {
+                name,
+                contactEmail,
+                ...(operatorReferenceId !== undefined && { operatorReferenceId })
+            }
         });
 
         await prisma.auditLog.create({
@@ -106,7 +137,7 @@ exports.updateCompany = async (req, res) => {
                 entity: 'COMPANY',
                 entityId: company.id,
                 details: `Company metadata aligned. Modified targets: Name: "${name}", Email: "${contactEmail}".`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: req.user.id
             }
         });
@@ -118,92 +149,79 @@ exports.updateCompany = async (req, res) => {
     }
 };
 
-// 4. DESTRUCTIVE PURGE TRANSACTION: Cascade-drop relational constraints
+// 4. DESTRUCTIVE PURGE TRANSACTION
 exports.deleteCompany = async (req, res) => {
     try {
         const { id } = req.params;
-        const companyIdInt = parseInt(id);
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const companyIdInt = parseInt(id, 10);
+        const clientIp = getClientIp(req);
 
-        // Execute dynamic cascaded drop inside a Prisma transaction to clear NoAction foreign limits
         await prisma.$transaction(async (tx) => {
-
-            // 1. Fetch targeted location ids for deeper parsing downstream
             const locationIds = await tx.location.findMany({
                 where: { companyId: companyIdInt },
                 select: { id: true }
             }).then(locs => locs.map(l => l.id));
 
             if (locationIds.length > 0) {
-                // 2. Clear media tracking files matching location dependencies
                 await tx.media.deleteMany({
                     where: { locationId: { in: locationIds } }
                 });
 
-                // 3. Find connected charge point devices
                 const cpIds = await tx.chargePoint.findMany({
                     where: { locationId: { in: locationIds } },
                     select: { id: true }
                 }).then(cps => cps.map(c => c.id));
 
                 if (cpIds.length > 0) {
-                    // 4. Find nested child terminal connectors
                     const connIds = await tx.connector.findMany({
                         where: { chargePointId: { in: cpIds } },
                         select: { id: true }
                     }).then(conns => conns.map(c => c.id));
 
                     if (connIds.length > 0) {
-                        // 5. Purge active/historical sessions and structural plugs
                         await tx.session.deleteMany({ where: { connectorId: { in: connIds } } });
                         await tx.connector.deleteMany({ where: { chargePointId: { in: cpIds } } });
                     }
-                    // 6. Purge hardware nodes
                     await tx.chargePoint.deleteMany({ where: { locationId: { in: locationIds } } });
                 }
-                // 7. Purge parent spatial fields and linked commercial pricing structures
                 await tx.location.deleteMany({ where: { companyId: companyIdInt } });
                 await tx.tariff.deleteMany({ where: { companyId: companyIdInt } });
             }
 
-            // 8. Dissociate active integration credentials and nested tenant profiles
             await tx.apiKey.deleteMany({ where: { companyId: companyIdInt } });
             await tx.user.deleteMany({ where: { companyId: companyIdInt } });
-
-            // 9. Wipe the parent company record entry cleanly out of the database structure
             await tx.company.delete({ where: { id: companyIdInt } });
         });
 
-        // Log final asset deletion drop sequence status to audit tracking ledger
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'COMPANY',
                 entityId: companyIdInt,
-                details: `Permanently deleted company partition [ID: ${companyIdInt}] and all associated infrastructure cascading elements.`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                details: `Permanently deleted company partition [ID: ${companyIdInt}] and all associated infrastructure elements.`,
+                ipAddress: clientIp,
                 userId: req.user.id
             }
         });
 
-        res.json({ success: true, message: "Company and all associated cascading infrastructure elements successfully purged from records archive." });
+        res.json({ success: true, message: "Company and all associated infrastructure elements successfully purged." });
     } catch (error) {
         console.error("Destructive transaction chain collapsed:", error);
         res.status(500).json({ success: false, message: "Failed to purge operational entity structures cleanly." });
     }
 };
 
-// 5. CPO SELF-SERVICE PROFILE: Allow an authorized tenant workspace administrator to alter own endpoints
+// 5. CPO SELF-SERVICE PROFILE
 exports.updateMyCompany = async (req, res) => {
     try {
-        const { companyId } = req.user; 
+        const { companyId } = req.user;
         const { name, contactEmail } = req.body;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const clientIp = getClientIp(req);
 
         if (!companyId) {
-            return res.status(403).json({ 
-                success: false, 
-                message: "Access Denied: Your profile node is not linked to an operational company tenant." 
+            return res.status(403).json({
+                success: false,
+                message: "Access Denied: Your profile node is not linked to an operational company tenant."
             });
         }
 
@@ -218,15 +236,15 @@ exports.updateMyCompany = async (req, res) => {
                 entity: 'COMPANY_SELF_PROFILE',
                 entityId: updatedCompany.id,
                 details: `Company Admin updated profile metrics. Corporate Name: "${name}", Email: "${contactEmail}".`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: req.user.id
             }
         });
 
-        res.json({ 
-            success: true, 
-            message: "Corporate network profile settings updated successfully.", 
-            data: updatedCompany 
+        res.json({
+            success: true,
+            message: "Corporate network profile settings updated successfully.",
+            data: updatedCompany
         });
     } catch (error) {
         console.error("Self-service company settings mutation failed:", error);

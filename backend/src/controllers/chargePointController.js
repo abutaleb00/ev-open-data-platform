@@ -6,7 +6,17 @@ const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
 };
 
-// Get all charge points (Filtered by role, includes parent locations and company structures)
+// Safe JSON parser helper
+const safeJsonParse = (str) => {
+    if (!str) return null;
+    try {
+        return JSON.parse(str);
+    } catch (_) {
+        return str;
+    }
+};
+
+// 1. GET ALL CHARGE POINTS (Supports role boundary guards, 1:1 OCPI pass-through parsing, and child connectors)
 exports.getAllChargePoints = async (req, res) => {
     try {
         const { role, companyId } = req.user;
@@ -14,80 +24,160 @@ exports.getAllChargePoints = async (req, res) => {
 
         const chargePoints = await prisma.chargePoint.findMany({
             where: isSuperAdmin ? {} : {
-                location: { companyId: parseInt(companyId) }
+                location: { companyId: parseInt(companyId, 10) }
             },
             include: {
                 location: {
-                    include: {
-                        company: { select: { name: true } }
+                    select: {
+                        id: true,
+                        locationUid: true,
+                        name: true,
+                        address: true,
+                        city: true,
+                        postcode: true,
+                        companyId: true,
+                        company: { select: { id: true, name: true, operatorReferenceId: true } }
                     }
-                }
+                },
+                connectors: true
             },
             orderBy: { createdAt: 'desc' }
         });
-        res.json({ success: true, data: chargePoints });
+
+        const mappedChargePoints = chargePoints.map((cp) => {
+            const parsedDirections = safeJsonParse(cp.directions);
+            const parsedStatusSchedule = safeJsonParse(cp.statusSchedule);
+            const parsedEvseImages = safeJsonParse(cp.evseImages);
+
+            return {
+                id: cp.id,
+                hardwareId: cp.hardwareId,
+                evseUid: cp.evseUid || `evse_${cp.id}`,
+                status: cp.status || 'AVAILABLE',
+                floorLevel: cp.floorLevel || '',
+                physicalReference: cp.physicalReference || null,
+                isApproved: cp.isApproved,
+                createdAt: cp.createdAt,
+                updatedAt: cp.updatedAt,
+
+                // Spatial & Direction Attributes
+                evseLatitude: cp.evseLatitude || cp.location?.latitude || null,
+                evseLongitude: cp.evseLongitude || cp.location?.longitude || null,
+                directions: Array.isArray(parsedDirections) ? parsedDirections : (parsedDirections ? [parsedDirections] : []),
+                capabilities: cp.capabilities ? cp.capabilities.split(',').map(c => c.trim()) : [],
+                parkingRestrictions: cp.parkingRestrictions ? cp.parkingRestrictions.split(',').map(p => p.trim()) : [],
+                statusSchedule: parsedStatusSchedule,
+                images: Array.isArray(parsedEvseImages) ? parsedEvseImages : [],
+
+                // Parent Location Relation
+                locationId: cp.locationId,
+                locationName: cp.location?.name || 'Unknown Location',
+                locationUid: cp.location?.locationUid || null,
+                companyId: cp.location?.companyId || null,
+                companyName: cp.location?.company?.name || 'Independent Operator',
+
+                // Child Connectors
+                connectorsCount: cp.connectors?.length || 0,
+                connectors: (cp.connectors || []).map((conn) => ({
+                    id: conn.id,
+                    connectorUid: conn.connectorUid || `conn_${conn.id}`,
+                    type: conn.type,
+                    standard: conn.standard,
+                    format: conn.format,
+                    powerType: conn.powerType,
+                    maxPowerKw: conn.maxPowerKw,
+                    voltage: conn.voltage,
+                    amperage: conn.amperage,
+                    status: conn.status,
+                    termsAndConditions: conn.termsAndConditions,
+                    tariffIds: safeJsonParse(conn.tariffIdsJson) || []
+                }))
+            };
+        });
+
+        res.json({ success: true, data: mappedChargePoints });
     } catch (error) {
-        console.error(error);
+        console.error("Failed to query charge point registry:", error);
         res.status(500).json({ success: false, message: "Failed to fetch charge point registry nodes." });
     }
 };
 
-// Create a new charge point (Including OCPI floorLevel definitions)
+// 2. CREATE A NEW CHARGE POINT
 exports.createChargePoint = async (req, res) => {
     try {
-        const { hardwareId, locationId, status, floorLevel } = req.body;
+        const {
+            hardwareId, locationId, status, floorLevel, evseUid,
+            physicalReference, parkingRestrictions, capabilities,
+            directions, evseLatitude, evseLongitude
+        } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const clientIp = getClientIp(req);
 
-        // Security Check: Ensure the target parent location belongs to the user's company tenancy
-        if (role !== 'SUPER_ADMIN') {
-            const targetLocation = await prisma.location.findUnique({ where: { id: parseInt(locationId) } });
-            if (!targetLocation || targetLocation.companyId !== userCompanyId) {
-                return res.status(403).json({ success: false, message: "Unauthorized: Target location belongs to a different network operator profile." });
-            }
+        const targetLocationId = parseInt(locationId, 10);
+        if (isNaN(targetLocationId)) {
+            return res.status(400).json({ success: false, message: "Valid parent locationId is required." });
+        }
+
+        // Security Check: Verify location tenancy
+        const targetLocation = await prisma.location.findUnique({ where: { id: targetLocationId } });
+        if (!targetLocation) {
+            return res.status(404).json({ success: false, message: "Target location node not found." });
+        }
+
+        if (role !== 'SUPER_ADMIN' && targetLocation.companyId !== userCompanyId) {
+            return res.status(403).json({ success: false, message: "Unauthorized: Target location belongs to a different network operator profile." });
         }
 
         const chargePoint = await prisma.chargePoint.create({
             data: {
                 hardwareId,
-                locationId: parseInt(locationId),
-                status: status || 'UNKNOWN',
-
-                // --- NEW OCPI DATA ATTRIBUTE ---
-                floorLevel: floorLevel || null
+                locationId: targetLocationId,
+                evseUid: evseUid || null,
+                status: status || 'AVAILABLE',
+                floorLevel: floorLevel || null,
+                physicalReference: physicalReference || null,
+                parkingRestrictions: Array.isArray(parkingRestrictions) ? parkingRestrictions.join(',') : parkingRestrictions || null,
+                capabilities: Array.isArray(capabilities) ? capabilities.join(',') : capabilities || 'REMOTE_START_STOP_CAPABLE',
+                directions: typeof directions === 'object' ? JSON.stringify(directions) : directions || null,
+                evseLatitude: evseLatitude ? parseFloat(evseLatitude) : null,
+                evseLongitude: evseLongitude ? parseFloat(evseLongitude) : null,
+                isApproved: true
             }
         });
 
-        // Log transaction inside global audit stream with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'CREATE',
                 entity: 'CHARGE_POINT',
                 entityId: chargePoint.id,
                 details: `Created new OCPI compliant EVSE hardware node: "${hardwareId}" at floor context [${floorLevel || 'Ground'}]`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
         res.status(201).json({ success: true, data: chargePoint });
     } catch (error) {
-        console.error(error);
+        console.error("Create charge point error:", error);
         res.status(500).json({ success: false, message: "Failed to provision new charge point asset mapping." });
     }
 };
 
-// Update an existing charge point
+// 3. UPDATE AN EXISTING CHARGE POINT
 exports.updateChargePoint = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hardwareId, locationId, status, isApproved, floorLevel } = req.body;
+        const {
+            hardwareId, locationId, status, isApproved, floorLevel, evseUid,
+            physicalReference, parkingRestrictions, capabilities, directions,
+            evseLatitude, evseLongitude
+        } = req.body;
         const { id: userId, role, companyId: userCompanyId } = req.user;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const clientIp = getClientIp(req);
 
-        // Security Check: Verify absolute asset ownership matrix boundary fields
+        const parsedCpId = parseInt(id, 10);
         const existingCP = await prisma.chargePoint.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: parsedCpId },
             include: { location: true }
         });
 
@@ -99,48 +189,54 @@ exports.updateChargePoint = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized access or modification attempt to this asset index." });
         }
 
-        const chargePoint = await prisma.chargePoint.update({
-            where: { id: parseInt(id) },
-            data: {
-                ...(hardwareId && { hardwareId }),
-                ...(locationId && { locationId: parseInt(locationId) }),
-                ...(status && { status }),
-                ...(isApproved !== undefined && { isApproved }),
+        const updateData = {
+            ...(hardwareId && { hardwareId }),
+            ...(evseUid !== undefined && { evseUid }),
+            ...(locationId && { locationId: parseInt(locationId, 10) }),
+            ...(status && { status }),
+            ...(isApproved !== undefined && { isApproved: Boolean(isApproved) }),
+            ...(floorLevel !== undefined && { floorLevel }),
+            ...(physicalReference !== undefined && { physicalReference }),
+            ...(parkingRestrictions !== undefined && { parkingRestrictions: Array.isArray(parkingRestrictions) ? parkingRestrictions.join(',') : parkingRestrictions }),
+            ...(capabilities !== undefined && { capabilities: Array.isArray(capabilities) ? capabilities.join(',') : capabilities }),
+            ...(directions !== undefined && { directions: typeof directions === 'object' ? JSON.stringify(directions) : directions }),
+            ...(evseLatitude !== undefined && { evseLatitude: parseFloat(evseLatitude) }),
+            ...(evseLongitude !== undefined && { evseLongitude: parseFloat(evseLongitude) })
+        };
 
-                // --- NEW MUTABLE OCPI ATTR ---
-                ...(floorLevel !== undefined && { floorLevel })
-            }
+        const chargePoint = await prisma.chargePoint.update({
+            where: { id: parsedCpId },
+            data: updateData
         });
 
-        // Commit profile action state to security logging with IP mapping populated
         await prisma.auditLog.create({
             data: {
                 action: 'UPDATE',
                 entity: 'CHARGE_POINT',
                 entityId: chargePoint.id,
                 details: `Updated charge point configuration data matrices for: "${chargePoint.hardwareId}"`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
         res.json({ success: true, data: chargePoint });
     } catch (error) {
-        console.error(error);
+        console.error("Update charge point error:", error);
         res.status(500).json({ success: false, message: "Failed to compile updates to target asset profile configuration." });
     }
 };
 
-// Delete a charge point
+// 4. DELETE A CHARGE POINT (Transactional Cascading Purge)
 exports.deleteChargePoint = async (req, res) => {
     try {
         const { id } = req.params;
         const { id: userId, role, companyId: userCompanyId } = req.user;
-        const clientIp = getClientIp(req); // <-- Captures request origin IP vector
+        const parsedCpId = parseInt(id, 10);
+        const clientIp = getClientIp(req);
 
-        // Security Check: Verify absolute tenancy boundaries before wiping tracking nodes
         const cpToDelete = await prisma.chargePoint.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: parsedCpId },
             include: { location: true }
         });
 
@@ -152,30 +248,37 @@ exports.deleteChargePoint = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized to invoke deletion sequences on this asset container." });
         }
 
-        await prisma.chargePoint.delete({ where: { id: parseInt(id) } });
+        // Execute Cascading Purge Transaction
+        await prisma.$transaction(async (tx) => {
+            const connectors = await tx.connector.findMany({
+                where: { chargePointId: parsedCpId },
+                select: { id: true }
+            });
+            const connectorIds = connectors.map(c => c.id);
 
-        // Log final asset deletion drop sequence status with IP mapping populated
+            if (connectorIds.length > 0) {
+                await tx.session.deleteMany({ where: { connectorId: { in: connectorIds } } });
+                await tx.connector.deleteMany({ where: { chargePointId: parsedCpId } });
+            }
+
+            await tx.media.deleteMany({ where: { chargePointId: parsedCpId } });
+            await tx.chargePoint.delete({ where: { id: parsedCpId } });
+        });
+
         await prisma.auditLog.create({
             data: {
                 action: 'DELETE',
                 entity: 'CHARGE_POINT',
-                entityId: parseInt(id),
+                entityId: parsedCpId,
                 details: `Permanently unmapped and dropped charge point node: "${cpToDelete.hardwareId}"`,
-                ipAddress: clientIp, // <-- Populates standalone ipAddress column cleanly
+                ipAddress: clientIp,
                 userId: userId
             }
         });
 
         res.json({ success: true, message: "Hardware tracking point unmapped successfully." });
     } catch (error) {
-        console.error(error);
-        // Protect database row relationships against invalid orphaned connector arrays
-        if (error.code === 'P2003') {
-            return res.status(400).json({
-                success: false,
-                message: "Cannot isolate and drop charge point. Active downstream connectors and plug vectors remain mapped to this hardware parent entry."
-            });
-        }
-        res.status(500).json({ success: false, message: "Failed to execute absolute deletion cycle." });
+        console.error("Delete charge point error:", error);
+        res.status(500).json({ success: false, message: "Failed to execute deletion cycle." });
     }
 };

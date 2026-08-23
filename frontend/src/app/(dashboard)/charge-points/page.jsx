@@ -5,33 +5,41 @@ import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import {
     Plus, Zap, MapPin, Edit2, Trash2, Layers,
-    X, AlertCircle, CheckCircle2, Clock, Server
+    X, AlertCircle, CheckCircle2, Clock, Server,
+    Eye, Info, Building2, Navigation, Plug
 } from 'lucide-react';
 
 export default function ChargePointsPage() {
-    const { user } = useAuthStore(); // Grab user context profile securely
+    const { user } = useAuthStore();
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-    // Data State
+    // Data States
     const [chargePoints, setChargePoints] = useState([]);
     const [locations, setLocations] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Modal State
-    const [modalMode, setModalMode] = useState(null);
+    // Modal Control States
+    const [modalMode, setModalMode] = useState(null); // 'create', 'edit', 'delete', 'details'
     const [selectedCP, setSelectedCP] = useState(null);
+    const [activeTab, setActiveTab] = useState('overview');
 
     // Form State
     const [formData, setFormData] = useState({
         hardwareId: '',
+        evseUid: '',
         locationId: '',
-        status: 'UNKNOWN',
+        status: 'AVAILABLE',
         isApproved: false,
-        floorLevel: ''
+        floorLevel: '',
+        physicalReference: '',
+        parkingRestrictions: '',
+        capabilities: 'REMOTE_START_STOP_CAPABLE',
+        evseLatitude: '',
+        evseLongitude: ''
     });
     const [submitting, setSubmitting] = useState(false);
 
-    // Fetch Initial Data Matrix
+    // Fetch Initial Data
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -63,22 +71,35 @@ export default function ChargePointsPage() {
     const openModal = (mode, cp = null) => {
         setModalMode(mode);
         setSelectedCP(cp);
-        if (cp && mode === 'edit') {
+        setActiveTab('overview');
+
+        if (cp && (mode === 'edit' || mode === 'details')) {
             setFormData({
                 hardwareId: cp.hardwareId || '',
+                evseUid: cp.evseUid || '',
                 locationId: cp.locationId || '',
-                status: cp.status || 'UNKNOWN',
+                status: cp.status || 'AVAILABLE',
                 isApproved: cp.isApproved || false,
-                floorLevel: cp.floorLevel || ''
+                floorLevel: cp.floorLevel || '',
+                physicalReference: cp.physicalReference || '',
+                parkingRestrictions: Array.isArray(cp.parkingRestrictions) ? cp.parkingRestrictions.join(', ') : cp.parkingRestrictions || '',
+                capabilities: Array.isArray(cp.capabilities) ? cp.capabilities.join(', ') : cp.capabilities || 'REMOTE_START_STOP_CAPABLE',
+                evseLatitude: cp.evseLatitude || '',
+                evseLongitude: cp.evseLongitude || ''
             });
         } else {
-            // 🔥 FORCE FALSE ON CREATION: New deployments from company dashboards start as pending moderation
             setFormData({
                 hardwareId: '',
+                evseUid: '',
                 locationId: '',
-                status: 'PLANNED',
+                status: 'AVAILABLE',
                 isApproved: false,
-                floorLevel: ''
+                floorLevel: '',
+                physicalReference: '',
+                parkingRestrictions: '',
+                capabilities: 'REMOTE_START_STOP_CAPABLE',
+                evseLatitude: '',
+                evseLongitude: ''
             });
         }
     };
@@ -88,12 +109,11 @@ export default function ChargePointsPage() {
         setSelectedCP(null);
     };
 
-    // CRUD Operations
+    // Save Action
     const handleSave = async (e) => {
         e.preventDefault();
         setSubmitting(true);
 
-        // Security Guard Layer: Strip authorization values if a non-admin attempts a profile injection exploit
         const payload = {
             ...formData,
             isApproved: isSuperAdmin ? formData.isApproved : (modalMode === 'edit' ? selectedCP.isApproved : false)
@@ -114,6 +134,7 @@ export default function ChargePointsPage() {
         }
     };
 
+    // Delete Action
     const handleDelete = async () => {
         setSubmitting(true);
         try {
@@ -127,114 +148,142 @@ export default function ChargePointsPage() {
         }
     };
 
-    // Helper for status badges
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'OPERATIONAL': return <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold border border-emerald-200/60 flex items-center w-max"><CheckCircle2 size={12} className="mr-1.5" /> Operational</span>;
-            case 'AVAILABLE': return <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold border border-emerald-200/60 flex items-center w-max"><CheckCircle2 size={12} className="mr-1.5" /> Available</span>;
-            case 'PLANNED': return <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-bold border border-blue-200/60 flex items-center w-max"><Clock size={12} className="mr-1.5" /> Planned</span>;
-            case 'OUT_OF_SERVICE': return <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 rounded-md text-xs font-bold border border-amber-200/60 flex items-center w-max"><AlertCircle size={12} className="mr-1.5" /> Out of Service</span>;
-            case 'FAULTED': return <span className="px-2.5 py-0.5 bg-red-50 text-red-700 rounded-md text-xs font-bold border border-red-200/60 flex items-center w-max"><X size={12} className="mr-1.5" /> Faulted</span>;
-            default: return <span className="px-2.5 py-0.5 bg-gray-50 text-gray-700 rounded-md text-xs font-bold border border-gray-200 flex items-center w-max">{status || 'UNKNOWN'}</span>;
+            case 'OPERATIONAL':
+            case 'AVAILABLE':
+            case 'CHARGING':
+                return <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black border border-emerald-200 flex items-center w-max"><CheckCircle2 size={11} className="mr-1" /> {status}</span>;
+            case 'PLANNED':
+            case 'INOPERATIVE':
+                return <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black border border-blue-200 flex items-center w-max"><Clock size={11} className="mr-1" /> {status}</span>;
+            case 'OUT_OF_SERVICE':
+            case 'BLOCKED':
+                return <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black border border-amber-200 flex items-center w-max"><AlertCircle size={11} className="mr-1" /> {status}</span>;
+            case 'FAULTED':
+                return <span className="px-2.5 py-0.5 bg-rose-50 text-rose-700 rounded-full text-[10px] font-black border border-rose-200 flex items-center w-max"><X size={11} className="mr-1" /> FAULTED</span>;
+            default:
+                return <span className="px-2.5 py-0.5 bg-slate-50 text-slate-700 rounded-full text-[10px] font-black border border-slate-200 flex items-center w-max">{status || 'UNKNOWN'}</span>;
         }
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="space-y-6 max-w-7xl mx-auto pb-12 select-none">
 
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+            {/* Header Banner */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex items-center space-x-4">
-                    <div className="p-3.5 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl text-blue-600 ring-1 ring-blue-200/50 shadow-inner">
+                    <div className="p-3.5 bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100 shadow-2xs">
                         <Zap size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Hardware Assets</h2>
-                        <p className="text-sm text-slate-500 mt-0.5 font-medium">Manage physical chargers, deployment floor ranges, and hardware IDs</p>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Hardware Charge Points (EVSEs)</h2>
+                        <p className="text-xs text-slate-400 font-bold mt-0.5">Manage physical charge points, connectors, and OCPI hardware capabilities</p>
                     </div>
                 </div>
 
                 <button
                     onClick={() => openModal('create')}
-                    className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-md hover:shadow-lg font-semibold active:scale-95"
+                    className="flex cursor-pointer items-center justify-center space-x-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 text-xs font-black uppercase tracking-wider transition-all shadow-2xs active:scale-95"
                 >
-                    <Plus size={18} strokeWidth={2.5} />
+                    <Plus size={14} strokeWidth={2.5} />
                     <span>Deploy Charger</span>
                 </button>
             </div>
 
             {/* Main Table Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50/80">
                             <tr>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Hardware ID</th>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Host Location</th>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Floor Placement</th>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Operator</th>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform Auth</th>
-                                <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Hardware ID & UID</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Host Site Location</th>
+                                <th scope="col" className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">Plugs (Connectors)</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Operator</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Auth Status</th>
+                                <th scope="col" className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-16 text-center text-slate-400">
-                                        <Zap size={32} className="animate-pulse mx-auto mb-3 text-blue-400" />
-                                        <p className="text-sm font-medium">Synchronizing active asset structures...</p>
+                                        <Zap size={24} className="animate-spin mx-auto mb-3 text-indigo-500" />
+                                        <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading hardware registry...</p>
                                     </td>
                                 </tr>
                             ) : chargePoints.length === 0 ? (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
                                         <Server size={36} className="mx-auto mb-3 text-slate-300" strokeWidth={1.5} />
-                                        <p className="text-base font-bold text-slate-900">No hardware deployed</p>
-                                        <p className="text-sm mt-1">Deploy your first charge point to map out routing parameters.</p>
+                                        <p className="text-sm font-black text-slate-900">No EVSE hardware deployed</p>
                                     </td>
                                 </tr>
                             ) : (
                                 chargePoints.map((cp) => (
                                     <tr key={cp.id} className="hover:bg-slate-50/80 transition-colors group">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center text-sm font-bold text-slate-900 font-mono">
-                                                <Server size={14} className="mr-2 text-slate-400" />
-                                                {cp.hardwareId}
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center text-sm font-black text-slate-900 font-mono">
+                                                    <Server size={14} className="mr-2 text-slate-400 shrink-0" />
+                                                    {cp.hardwareId}
+                                                </div>
+                                                <div className="flex items-center space-x-2 mt-0.5">
+                                                    <span className="text-[10px] font-mono text-slate-400">UID: {cp.evseUid}</span>
+                                                    {cp.floorLevel && (
+                                                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                                                            Floor {cp.floorLevel}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center text-sm text-slate-700 font-semibold">
-                                                <MapPin size={13} className="mr-2 text-blue-500" />
-                                                {cp.location?.name || <span className="text-red-400 font-medium italic">Orphaned Station</span>}
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center text-xs font-extrabold text-slate-800">
+                                                    <MapPin size={13} className="mr-1.5 text-indigo-500 shrink-0" />
+                                                    {cp.locationName}
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center text-xs font-bold text-slate-500">
-                                                <Layers size={13} className="mr-1.5 text-slate-400" />
-                                                {cp.floorLevel ? `Floor ${cp.floorLevel}` : <span className="font-normal text-slate-400 italic">Ground Level</span>}
-                                            </div>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                <Plug size={12} className="mr-1" />
+                                                {cp.connectorsCount ?? cp.connectors?.length ?? 0} Plugs
+                                            </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-600">
-                                            {cp.location?.company?.name || '—'}
+                                        <td className="px-6 py-4 whitespace-nowrap text-xs font-extrabold text-slate-700">
+                                            <div className="flex items-center">
+                                                <Building2 size={13} className="mr-1.5 text-slate-400 shrink-0" />
+                                                {cp.companyName}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {getStatusBadge(cp.status)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {cp.isApproved ? (
-                                                <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md flex items-center text-xs font-black w-max"><CheckCircle2 size={13} className="mr-1" /> Verified</span>
+                                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
+                                                    <CheckCircle2 size={11} className="mr-1" /> Verified
+                                                </span>
                                             ) : (
-                                                <span className="text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-md flex items-center text-xs font-black w-max"><Clock size={13} className="mr-1" /> Pending</span>
+                                                <span className="text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
+                                                    <Clock size={11} className="mr-1" /> Pending
+                                                </span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => openModal('edit', cp)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Configure">
-                                                    <Edit2 size={16} strokeWidth={2.5} />
+                                            <div className="flex items-center justify-end space-x-1">
+                                                <button onClick={() => openModal('details', cp)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="View Full Specs">
+                                                    <Eye size={15} />
                                                 </button>
-                                                <button onClick={() => openModal('delete', cp)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Decommission">
-                                                    <Trash2 size={16} strokeWidth={2.5} />
+                                                <button onClick={() => openModal('edit', cp)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Configure Unit">
+                                                    <Edit2 size={15} />
+                                                </button>
+                                                <button onClick={() => openModal('delete', cp)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Decommission">
+                                                    <Trash2 size={15} />
                                                 </button>
                                             </div>
                                         </td>
@@ -246,133 +295,259 @@ export default function ChargePointsPage() {
                 </div>
             </div>
 
-            {/* Dynamic Dialog Modal */}
+            {/* Modals Container */}
             {modalMode && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={closeModal}></div>
+                <div className="fixed inset-0 z-40 flex items-center justify-center p-4 animate-in fade-in duration-150">
+                    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity" onClick={closeModal}></div>
 
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-150 bg-slate-50/50">
-                            <h3 className="text-lg font-black text-slate-900">
-                                {modalMode === 'create' && 'Deploy New Hardware'}
-                                {modalMode === 'edit' && 'Configure Hardware Scope'}
-                                {modalMode === 'delete' && 'Decommission Asset'}
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 z-50">
+
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                                {modalMode === 'create' && 'Deploy EVSE Hardware Unit'}
+                                {modalMode === 'edit' && 'Configure Hardware Properties'}
+                                {modalMode === 'details' && 'EVSE Specifications & Connectors'}
+                                {modalMode === 'delete' && 'Confirm Decommission Protocol'}
                             </h3>
-                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-1.5 rounded-full transition-colors">
-                                <X size={20} strokeWidth={2.5} />
+                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer">
+                                <X size={16} strokeWidth={2.5} />
                             </button>
                         </div>
 
-                        {/* Form Content Elements */}
+                        {/* Details Modal */}
+                        {modalMode === 'details' && selectedCP && (
+                            <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+
+                                {/* Header */}
+                                <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                                    <div>
+                                        <h3 className="text-base font-mono font-black text-slate-900">{selectedCP.hardwareId}</h3>
+                                        <span className="text-[10px] font-mono text-slate-400">UID: {selectedCP.evseUid}</span>
+                                    </div>
+                                    {getStatusBadge(selectedCP.status)}
+                                </div>
+
+                                {/* Tabs Navigation */}
+                                <div className="flex border-b border-slate-100 gap-4">
+                                    <button
+                                        onClick={() => setActiveTab('overview')}
+                                        className={`pb-2 text-xs font-black uppercase tracking-wider cursor-pointer border-b-2 transition-all ${activeTab === 'overview' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'
+                                            }`}
+                                    >
+                                        Hardware Specs
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('connectors')}
+                                        className={`pb-2 text-xs font-black uppercase tracking-wider cursor-pointer border-b-2 transition-all ${activeTab === 'connectors' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'
+                                            }`}
+                                    >
+                                        Plugs & Tariffs ({selectedCP.connectors?.length || 0})
+                                    </button>
+                                </div>
+
+                                {/* TAB 1: OVERVIEW */}
+                                {activeTab === 'overview' && (
+                                    <div className="space-y-4 text-xs">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="text-[9px] font-black uppercase text-slate-400">Host Site Location</span>
+                                                <p className="font-bold text-slate-800 mt-0.5">{selectedCP.locationName}</p>
+                                            </div>
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="text-[9px] font-black uppercase text-slate-400">Operator Company</span>
+                                                <p className="font-bold text-slate-800 mt-0.5">{selectedCP.companyName}</p>
+                                            </div>
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="text-[9px] font-black uppercase text-slate-400">Floor Level Placement</span>
+                                                <p className="font-bold text-slate-800 mt-0.5">{selectedCP.floorLevel || 'Ground Level'}</p>
+                                            </div>
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="text-[9px] font-black uppercase text-slate-400">Coordinates</span>
+                                                <p className="font-mono font-bold text-slate-800 mt-0.5">
+                                                    {selectedCP.evseLatitude || 'Default'}, {selectedCP.evseLongitude || 'Default'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {selectedCP.capabilities && selectedCP.capabilities.length > 0 && (
+                                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">OCPI Capabilities</span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {selectedCP.capabilities.map((cap, idx) => (
+                                                        <span key={idx} className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-700">
+                                                            {cap}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* TAB 2: CONNECTORS */}
+                                {activeTab === 'connectors' && (
+                                    <div className="space-y-3">
+                                        {selectedCP.connectors && selectedCP.connectors.length > 0 ? (
+                                            selectedCP.connectors.map((conn) => (
+                                                <div key={conn.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                                                    <div className="flex items-center justify-between text-xs font-bold">
+                                                        <span className="font-mono text-indigo-900">{conn.standard} ({conn.format})</span>
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase">
+                                                            {conn.maxPowerKw} kW • {conn.powerType}
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                                                        <div>Voltage: <b>{conn.voltage}V</b></div>
+                                                        <div>Amperage: <b>{conn.amperage}A</b></div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-center text-slate-400 text-xs py-8">No connectors attached to this hardware unit.</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="pt-4 border-t border-slate-100 flex justify-end">
+                                    <button onClick={closeModal} className="px-5 py-2 bg-slate-900 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-800 cursor-pointer">
+                                        Close Specs
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Form Area (Create / Edit) */}
                         {(modalMode === 'create' || modalMode === 'edit') && (
-                            <form onSubmit={handleSave} className="p-6 space-y-5">
+                            <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+
                                 {locations.length === 0 && (
-                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-amber-800 text-sm">
+                                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-amber-800 text-xs font-semibold">
                                         <AlertCircle size={18} className="shrink-0 text-amber-500 mt-0.5" />
-                                        <p className="font-medium">No Host Locations discovered. You must populate an active operational mapping context site before mapping hardware entries.</p>
+                                        <p>No Host Locations found. You must register an operational location site before deploying hardware units.</p>
                                     </div>
                                 )}
 
                                 <div>
-                                    <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Hardware Serial ID</label>
+                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Hardware Serial ID</label>
                                     <input
                                         type="text" required
                                         value={formData.hardwareId}
                                         onChange={(e) => setFormData({ ...formData, hardwareId: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/10 font-mono text-sm font-semibold transition-all shadow-2xs"
-                                        placeholder="e.g. GB*CEV*E5f40193"
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-900 focus:bg-white focus:border-slate-400 outline-none"
+                                        placeholder="e.g. *Ada*EGBEV0667A1"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Host Target Location Node</label>
+                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Host Target Location Site</label>
                                     <select
                                         required
                                         value={formData.locationId}
                                         onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-sm font-bold text-slate-700 shadow-2xs"
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white outline-none cursor-pointer"
                                     >
                                         <option value="" disabled>Select physical installation hub...</option>
                                         {locations.map(loc => (
-                                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.postal_code || loc.postcode})</option>
+                                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.postcode || loc.postal_code})</option>
                                         ))}
                                     </select>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Operational Status</label>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Operational Status</label>
                                         <select
                                             value={formData.status}
                                             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-bold text-slate-700 shadow-2xs"
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
                                         >
-                                            <option value="UNKNOWN">UNKNOWN</option>
                                             <option value="AVAILABLE">AVAILABLE</option>
+                                            <option value="OPERATIONAL">OPERATIONAL</option>
+                                            <option value="CHARGING">CHARGING</option>
                                             <option value="PLANNED">PLANNED / BUILD</option>
                                             <option value="OUT_OF_SERVICE">OUT OF SERVICE</option>
-                                            <option value="FAULTED">HARDWARE FAULTED</option>
+                                            <option value="FAULTED">FAULTED</option>
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-black uppercase text-slate-500 mb-1.5">Floor Level Context</label>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Floor Level Context</label>
                                         <input
                                             type="text"
                                             value={formData.floorLevel}
                                             onChange={(e) => setFormData({ ...formData, floorLevel: e.target.value })}
-                                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-semibold shadow-2xs"
-                                            placeholder="e.g. -1, Ground, 2"
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none"
+                                            placeholder="e.g. Ground, Floor -1"
                                         />
                                     </div>
                                 </div>
 
-                                {/* 🔥 FIXED ACTION CONTROL GATED BY SECURE SYSTEM ROLE CALLS */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Latitude Override</label>
+                                        <input
+                                            type="number" step="any"
+                                            value={formData.evseLatitude}
+                                            onChange={(e) => setFormData({ ...formData, evseLatitude: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
+                                            placeholder="Optional override"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Longitude Override</label>
+                                        <input
+                                            type="number" step="any"
+                                            value={formData.evseLongitude}
+                                            onChange={(e) => setFormData({ ...formData, evseLongitude: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
+                                            placeholder="Optional override"
+                                        />
+                                    </div>
+                                </div>
+
                                 {modalMode === 'edit' && isSuperAdmin && (
-                                    <div className="pt-2 animate-in slide-in-from-top-2 duration-200">
+                                    <div className="pt-2">
                                         <label className="flex items-center space-x-3 cursor-pointer group w-fit">
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.isApproved ? 'bg-blue-600 border-blue-600' : 'bg-slate-50 border-slate-300'}`}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.isApproved}
-                                                    onChange={(e) => setFormData({ ...formData, isApproved: e.target.checked })}
-                                                    className="hidden"
-                                                />
-                                                {formData.isApproved && <CheckCircle2 size={14} className="text-white" strokeWidth={3} />}
-                                            </div>
-                                            <span className="text-sm text-slate-700 font-extrabold select-none">Authorize broadcast vectors to live maps</span>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.isApproved}
+                                                onChange={(e) => setFormData({ ...formData, isApproved: e.target.checked })}
+                                                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            <span className="text-xs font-black text-slate-700 uppercase tracking-wide select-none">Authorize broadcast vectors to live maps</span>
                                         </label>
                                     </div>
                                 )}
 
-                                <div className="flex space-x-3 mt-8 pt-4 border-t border-slate-100">
-                                    <button type="button" onClick={closeModal} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors">
+                                <div className="flex space-x-3 pt-4 border-t border-slate-100 mt-6">
+                                    <button type="button" onClick={closeModal} className="flex-1 py-2 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">
                                         Cancel
                                     </button>
-                                    <button type="submit" disabled={submitting || locations.length === 0} className="flex-1 px-4 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all shadow-md">
+                                    <button type="submit" disabled={submitting || locations.length === 0} className="flex-1 py-2 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-slate-800 transition-all shadow-sm cursor-pointer">
                                         {submitting ? 'Processing...' : 'Commit Hardware State'}
                                     </button>
                                 </div>
                             </form>
                         )}
 
-                        {/* Delete Confirm */}
+                        {/* Delete Confirmation */}
                         {modalMode === 'delete' && selectedCP && (
-                            <div className="p-8">
-                                <div className="flex flex-col items-center text-center space-y-4 mb-8">
-                                    <div className="h-16 w-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 mb-2 ring-8 ring-rose-50/40">
-                                        <Trash2 size={32} />
+                            <div className="p-6 space-y-6">
+                                <div className="flex flex-col items-center text-center space-y-3">
+                                    <div className="h-14 w-14 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 shadow-inner">
+                                        <AlertCircle size={26} />
                                     </div>
                                     <div>
-                                        <h4 className="text-xl font-black text-slate-900">Decommission Asset?</h4>
+                                        <h4 className="text-base font-black text-slate-900">Decommission Asset?</h4>
                                         <p className="text-xs text-slate-400 mt-2 max-w-sm font-semibold leading-relaxed">
-                                            You are executing decommissioning procedures on serial entry: <span className="font-mono font-black text-slate-800">"{selectedCP.hardwareId}"</span>. Attached connector parameters must be detached prior to processing deletion cycles.
+                                            Warning: Decommissioning serial entry: <span className="font-mono font-black text-slate-800">"{selectedCP.hardwareId}"</span> will purge all associated connectors.
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex space-x-3">
-                                    <button onClick={closeModal} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50 transition-colors">Cancel</button>
-                                    <button onClick={handleDelete} disabled={submitting} className="flex-1 px-4 py-2.5 bg-rose-600 text-white font-bold text-xs rounded-xl hover:bg-rose-700 transition-all shadow-md">
+                                <div className="flex space-x-3 pt-4 border-t border-slate-100">
+                                    <button onClick={closeModal} className="flex-1 py-2 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
+                                    <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer">
                                         {submitting ? 'Dropping...' : 'Confirm Decommission'}
                                     </button>
                                 </div>

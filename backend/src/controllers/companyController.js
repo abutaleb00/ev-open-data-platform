@@ -28,7 +28,8 @@ exports.getAllCompanies = async (req, res) => {
                         _count: {
                             select: { chargePoints: true }
                         }
-                    }
+                    },
+                    orderBy: { updatedAt: 'desc' }
                 }
             },
             orderBy: { createdAt: 'desc' }
@@ -44,15 +45,19 @@ exports.getAllCompanies = async (req, res) => {
             let ownerDetails = null;
             let realOperatorName = company.name;
 
-            if (company.locations && company.locations.length > 0) {
-                const firstLoc = company.locations[0];
+            // locations is ordered most-recently-updated first; use the newest
+            // location that actually carries operator/owner data rather than
+            // blindly reading index 0, which may be a location a sync payload
+            // never touched.
+            const enrichedLoc = company.locations.find(loc => loc.operatorData || loc.ownerData);
+            if (enrichedLoc) {
                 try {
-                    if (firstLoc.operatorData) {
-                        operatorDetails = JSON.parse(firstLoc.operatorData);
+                    if (enrichedLoc.operatorData) {
+                        operatorDetails = JSON.parse(enrichedLoc.operatorData);
                         if (operatorDetails?.name) realOperatorName = operatorDetails.name;
                     }
-                    if (firstLoc.ownerData) {
-                        ownerDetails = JSON.parse(firstLoc.ownerData);
+                    if (enrichedLoc.ownerData) {
+                        ownerDetails = JSON.parse(enrichedLoc.ownerData);
                     }
                 } catch (_) { }
             }

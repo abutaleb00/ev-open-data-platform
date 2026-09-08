@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const fs = require('fs');
 const path = require('path');
+const { touchCompany } = require('../utils/touchCompany');
 
 // Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
 const getClientIp = (req) => {
@@ -264,6 +265,8 @@ exports.createLocation = async (req, res) => {
             }
         });
 
+        await touchCompany(targetCompanyId);
+
         res.status(201).json({ success: true, data: result });
     } catch (error) {
         console.error("Create location error:", error);
@@ -366,6 +369,8 @@ exports.updateLocation = async (req, res) => {
             }
         });
 
+        await touchCompany(existingLocation.companyId);
+
         res.json({ success: true, data: location });
     } catch (error) {
         console.error("Update location error:", error);
@@ -437,6 +442,8 @@ exports.deleteLocation = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(locationToDelete.companyId);
 
         res.json({ success: true, message: "Location and associated infrastructure deleted successfully." });
     } catch (error) {

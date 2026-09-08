@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { touchCompany } = require('../utils/touchCompany');
 
 // Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
 const getClientIp = (req) => {
@@ -153,6 +154,8 @@ exports.createConnector = async (req, res) => {
             }
         });
 
+        await touchCompany(targetCP.location.companyId);
+
         res.status(201).json({ success: true, data: connector });
     } catch (error) {
         console.error("Create connector error:", error);
@@ -217,6 +220,8 @@ exports.updateConnector = async (req, res) => {
             }
         });
 
+        await touchCompany(existingConnector.chargePoint.location.companyId);
+
         res.json({ success: true, data: connector });
     } catch (error) {
         console.error("Update connector error:", error);
@@ -261,6 +266,8 @@ exports.deleteConnector = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(connectorToDelete.chargePoint.location.companyId);
 
         res.json({ success: true, message: "Connector node dropped successfully." });
     } catch (error) {

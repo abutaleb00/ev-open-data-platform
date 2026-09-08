@@ -69,6 +69,7 @@ exports.getAllCompanies = async (req, res) => {
                 contactEmail: company.contactEmail,
                 status: company.status,
                 createdAt: company.createdAt,
+                updatedAt: company.updatedAt,
 
                 // Enriched metadata from payload
                 website: operatorDetails?.website || null,

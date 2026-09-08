@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { touchCompany } = require('../utils/touchCompany');
 
 // Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
 const getClientIp = (req) => {
@@ -157,6 +158,8 @@ exports.createChargePoint = async (req, res) => {
             }
         });
 
+        await touchCompany(targetLocation.companyId);
+
         res.status(201).json({ success: true, data: chargePoint });
     } catch (error) {
         console.error("Create charge point error:", error);
@@ -222,6 +225,8 @@ exports.updateChargePoint = async (req, res) => {
             }
         });
 
+        await touchCompany(existingCP.location.companyId);
+
         res.json({ success: true, data: chargePoint });
     } catch (error) {
         console.error("Update charge point error:", error);
@@ -277,6 +282,8 @@ exports.deleteChargePoint = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(cpToDelete.location.companyId);
 
         res.json({ success: true, message: "Hardware tracking point unmapped successfully." });
     } catch (error) {

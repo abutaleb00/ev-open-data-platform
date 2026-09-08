@@ -15,6 +15,7 @@ model Company {
   contactEmail        String
   status              String     @default("PENDING")
   createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @default(now()) @updatedAt
 
   users               User[]
   locations           Location[]

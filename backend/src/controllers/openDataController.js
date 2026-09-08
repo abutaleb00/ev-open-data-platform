@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { hashApiKey, encryptApiKey, decryptApiKey } = require('../utils/apiKeyHash');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
+const { touchCompany } = require('../utils/touchCompany');
 
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -947,6 +948,8 @@ exports.ingestExternalData = async (req, res) => {
             }
         }
 
+        await touchCompany(companyId);
+
         return res.status(200).json({
             success: true,
             message: skippedIds.length > 0
@@ -1063,6 +1066,8 @@ exports.updateLocationMetadata = async (req, res) => {
             }
         });
 
+        await touchCompany(existingLocation.companyId);
+
         return res.status(200).json({ success: true, message: "Open data settings updated successfully." });
     } catch (error) {
         console.error("Portal metadata update error:", error);
@@ -1130,6 +1135,8 @@ exports.patchExternalLocation = async (req, res) => {
             where: { id: locationId },
             data: updateData
         });
+
+        await touchCompany(existingLocation.companyId);
 
         return res.status(200).json({
             success: true,
@@ -1315,6 +1322,8 @@ exports.patchExternalEvse = async (req, res) => {
             include: { connectors: true }
         });
 
+        await touchCompany(existingEvse.location.companyId);
+
         return res.status(200).json({
             success: true,
             message: "EVSE and associated connectors updated successfully.",
@@ -1370,6 +1379,8 @@ exports.patchExternalConnector = async (req, res) => {
             where: { id: parsedConnectorId },
             data: updateData
         });
+
+        await touchCompany(existingConnector.chargePoint.location.companyId);
 
         return res.status(200).json({
             success: true,

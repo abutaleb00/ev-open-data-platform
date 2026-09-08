@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { touchCompany } = require('../utils/touchCompany');
 
 // Helper Extraction Module: Pulls real client IP safely behind proxies
 const getClientIp = (req) => {
@@ -86,6 +87,8 @@ exports.createTariff = async (req, res) => {
             }
         });
 
+        await touchCompany(targetCompanyId);
+
         res.status(201).json({ success: true, data: tariff });
     } catch (error) {
         console.error("Tariff generation operation failed:", error);
@@ -131,6 +134,8 @@ exports.updateTariff = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(baselineTariff.companyId);
 
         res.json({ success: true, data: updatedTariff });
     } catch (error) {
@@ -178,6 +183,8 @@ exports.deleteTariff = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(baselineTariff.companyId);
 
         res.json({ success: true, message: "Tariff plan successfully removed and unlinked from connectors." });
     } catch (error) {

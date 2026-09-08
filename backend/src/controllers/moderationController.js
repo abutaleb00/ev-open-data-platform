@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { touchCompany } = require('../utils/touchCompany');
 
 // Helper Extraction Module: Pulls real client IP down behind Nginx proxies safely
 const getClientIp = (req) => {
@@ -68,6 +69,8 @@ exports.moderateLocation = async (req, res) => {
             }
         });
 
+        await touchCompany(updatedLocation.companyId);
+
         res.json({
             success: true,
             message: `Location was successfully ${approved ? 'approved' : 'rejected'}`,
@@ -92,7 +95,8 @@ exports.moderateChargePoint = async (req, res) => {
             data: {
                 isApproved: approved === true || approved === 'true',
                 rejectionNote: approved ? null : note // Clear note if approved, save if rejected
-            }
+            },
+            include: { location: { select: { companyId: true } } }
         });
 
         // Write an immutable log trace inside the Audit ledger system with IP mapping populated
@@ -106,6 +110,8 @@ exports.moderateChargePoint = async (req, res) => {
                 userId: userId
             }
         });
+
+        await touchCompany(updatedChargePoint.location.companyId);
 
         res.json({
             success: true,

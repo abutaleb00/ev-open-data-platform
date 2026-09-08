@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
+const { touchCompany } = require('../utils/touchCompany');
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
@@ -265,6 +266,8 @@ exports.syncOperatorData = async (req, res) => {
 
             locationsSynced.push(location.locationUid);
         }
+
+        await touchCompany(company.id);
 
         return res.status(200).json({
             success: true,

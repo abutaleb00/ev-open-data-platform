@@ -21,6 +21,14 @@ export default function CompaniesPage() {
     const [formData, setFormData] = useState({ name: '', contactEmail: '', operatorReferenceId: '' });
     const [submitting, setSubmitting] = useState(false);
 
+    const formatDate = (dateString) => {
+        if (!dateString) return '—';
+        return new Date(dateString).toLocaleString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    };
+
     const fetchCompanies = async () => {
         setLoading(true);
         try {
@@ -177,13 +185,15 @@ export default function CompaniesPage() {
                                 <th scope="col" className="px-6 py-4 text-left text-[11px] font-black uppercase text-slate-500 tracking-wider">Contact & Portal</th>
                                 <th scope="col" className="px-6 py-4 text-center text-[11px] font-black uppercase text-slate-500 tracking-wider">Metrics</th>
                                 <th scope="col" className="px-6 py-4 text-left text-[11px] font-black uppercase text-slate-500 tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black uppercase text-slate-500 tracking-wider">Created Date</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black uppercase text-slate-500 tracking-wider">Modified Date</th>
                                 <th scope="col" className="px-6 py-4 text-right text-[11px] font-black uppercase text-slate-500 tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-16 text-center">
+                                    <td colSpan="7" className="px-6 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center space-y-3 text-slate-400">
                                             <RefreshCw size={24} className="animate-spin text-indigo-600" />
                                             <p className="text-xs font-bold tracking-wide animate-pulse">Loading operators schema...</p>
@@ -192,7 +202,7 @@ export default function CompaniesPage() {
                                 </tr>
                             ) : filteredCompanies.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="px-6 py-16 text-center">
+                                    <td colSpan="7" className="px-6 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
                                             <AlertCircle size={32} className="text-slate-300" />
                                             <p className="text-sm font-black text-slate-700">No operator containers found</p>
@@ -277,8 +287,14 @@ export default function CompaniesPage() {
                                                     {company.status || 'ACTIVE'}
                                                 </span>
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-500">
+                                                {formatDate(company.createdAt)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-500">
+                                                {formatDate(company.updatedAt)}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <div className="flex items-center justify-end space-x-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex items-center justify-end space-x-1">
                                                     <button onClick={() => openModal('details', company)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="View Details">
                                                         <Eye size={16} />
                                                     </button>

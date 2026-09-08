@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
+const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
@@ -102,6 +103,11 @@ exports.syncOperatorData = async (req, res) => {
                 });
             }
         }
+
+        // Each sync call is treated as this operator's complete current state:
+        // wipe its existing Locations/ChargePoints/Connectors (and their Sessions/
+        // Media) first, then rebuild entirely fresh from this payload below.
+        await wipeOperatorInfrastructure(company.id);
 
         // ======================================================
         // RECURSIVE SYNC FOR LOCATIONS, EVSEs, CONNECTORS

@@ -3,6 +3,7 @@ const prisma = new PrismaClient();
 const crypto = require('crypto');
 const { hashApiKey, encryptApiKey, decryptApiKey } = require('../utils/apiKeyHash');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
+const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -818,6 +819,11 @@ exports.ingestExternalData = async (req, res) => {
 
         const companyId = resolution.company.id;
 
+        // Each ingest call is treated as this operator's complete current state:
+        // wipe its existing Locations/ChargePoints/Connectors (and their Sessions/
+        // Media) first, then rebuild entirely fresh from this payload below.
+        await wipeOperatorInfrastructure(companyId);
+
         const skippedIds = [];
         let processedCount = 0;
 
@@ -905,27 +911,36 @@ exports.ingestExternalData = async (req, res) => {
                     });
 
                     if (evse.connectors && Array.isArray(evse.connectors)) {
-                        await prisma.connector.deleteMany({
-                            where: { chargePointId: savedChargePoint.id }
-                        });
-
+                        // Match-and-update rather than delete-then-recreate: a connector
+                        // surviving wipeOperatorInfrastructure above did so because it has
+                        // real Session history, so it must be updated in place (preserving
+                        // its id) rather than replaced, if the payload still reports it.
                         for (const conn of evse.connectors) {
                             const parsedPowerKw = conn.max_electric_power ? parseFloat(conn.max_electric_power) / 1000 : 7.4;
+                            const connUid = conn.id ? String(conn.id) : null;
 
-                            await prisma.connector.create({
-                                data: {
-                                    chargePointId: savedChargePoint.id,
-                                    connectorUid: conn.id ? String(conn.id) : null,
-                                    type: (conn.power_type || "AC_3_PHASE").includes("DC") ? "DC" : "AC",
-                                    maxPowerKw: parsedPowerKw,
-                                    status: evse.status === "Available" ? "AVAILABLE" : "UNKNOWN",
-                                    standard: conn.standard || "IEC_62196_T2",
-                                    format: (conn.format || "SOCKET").toUpperCase(),
-                                    powerType: conn.power_type || "AC_3_PHASE",
-                                    voltage: parseInt(conn.max_voltage, 10) || 230,
-                                    amperage: parseInt(conn.max_amperage, 10) || 32
-                                }
-                            });
+                            const connData = {
+                                chargePointId: savedChargePoint.id,
+                                connectorUid: connUid,
+                                type: (conn.power_type || "AC_3_PHASE").includes("DC") ? "DC" : "AC",
+                                maxPowerKw: parsedPowerKw,
+                                status: evse.status === "Available" ? "AVAILABLE" : "UNKNOWN",
+                                standard: conn.standard || "IEC_62196_T2",
+                                format: (conn.format || "SOCKET").toUpperCase(),
+                                powerType: conn.power_type || "AC_3_PHASE",
+                                voltage: parseInt(conn.max_voltage, 10) || 230,
+                                amperage: parseInt(conn.max_amperage, 10) || 32
+                            };
+
+                            const existingConnector = connUid
+                                ? await prisma.connector.findFirst({ where: { chargePointId: savedChargePoint.id, connectorUid: connUid } })
+                                : null;
+
+                            if (existingConnector) {
+                                await prisma.connector.update({ where: { id: existingConnector.id }, data: connData });
+                            } else {
+                                await prisma.connector.create({ data: connData });
+                            }
                         }
                     }
                 }

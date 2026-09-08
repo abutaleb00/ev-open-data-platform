@@ -47,7 +47,7 @@ model User {
 
 model Location {
   id                  Int          @id @default(autoincrement())
-  locationUid         String?      // Stores exact payload ID e.g. "89dbcfe0-88d1-4841-8cab-b8e43aad3a69"
+  locationUid         String?      @unique // Stores exact payload ID e.g. "89dbcfe0-88d1-4841-8cab-b8e43aad3a69"
   name                String
   address             String
   postcode            String

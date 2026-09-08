@@ -795,28 +795,34 @@ exports.ingestExternalData = async (req, res) => {
         }
 
         const skippedIds = [];
+        let processedCount = 0;
 
         for (const loc of locations) {
-            const cleanedLocId = parseNumericId(loc.id);
+            // Location IDs are partner-controlled and OCPI-shaped (GUIDs, not necessarily
+            // numeric) - match on the dedicated locationUid string column, same pattern as
+            // ChargePoint.hardwareId below. The internal `id` stays a plain autoincrement PK.
+            const externalLocId = (loc.id !== undefined && loc.id !== null) ? String(loc.id).trim() : "";
 
-            if (!cleanedLocId) continue;
+            if (!externalLocId) {
+                skippedIds.push({ id: loc.id, reason: "Missing location ID" });
+                continue;
+            }
 
             // Refuse to touch a record ID that already belongs to a different tenant -
-            // numeric IDs are partner-supplied and must never be trusted to cross tenants.
+            // partner-supplied IDs must never be trusted to cross tenants.
             const existingLocation = await prisma.location.findUnique({
-                where: { id: cleanedLocId },
+                where: { locationUid: externalLocId },
                 select: { companyId: true }
             });
 
             if (existingLocation && existingLocation.companyId !== companyId) {
-                skippedIds.push(cleanedLocId);
+                skippedIds.push({ id: externalLocId, reason: "ID belongs to another operator" });
                 continue;
             }
 
             const savedLocation = await prisma.location.upsert({
-                where: { id: cleanedLocId },
+                where: { locationUid: externalLocId },
                 update: {
-                    locationUid: String(loc.id),
                     name: loc.name,
                     address: loc.address,
                     postcode: loc.postal_code || "",
@@ -830,8 +836,7 @@ exports.ingestExternalData = async (req, res) => {
                     companyId: companyId
                 },
                 create: {
-                    id: cleanedLocId,
-                    locationUid: String(loc.id),
+                    locationUid: externalLocId,
                     name: loc.name,
                     address: loc.address,
                     postcode: loc.postal_code || "",
@@ -847,6 +852,8 @@ exports.ingestExternalData = async (req, res) => {
                 }
             });
 
+            processedCount++;
+
             if (loc.evses && Array.isArray(loc.evses)) {
                 for (const evse of loc.evses) {
                     const hardwareIdVal = evse.evse_id || evse.uid || evse.id;
@@ -860,7 +867,7 @@ exports.ingestExternalData = async (req, res) => {
                     });
 
                     if (existingCp && existingCp.location.companyId !== companyId) {
-                        skippedIds.push(String(hardwareIdVal));
+                        skippedIds.push({ id: String(hardwareIdVal), reason: "EVSE ID belongs to another operator" });
                         continue;
                     }
 
@@ -912,9 +919,9 @@ exports.ingestExternalData = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: skippedIds.length > 0
-                ? "Data ingestion sequence completed with some records skipped (ID belongs to another operator)."
+                ? "Data ingestion sequence completed with some records skipped - see skippedIds for reasons."
                 : "Data ingestion sequence completed successfully.",
-            processedCount: locations.length - skippedIds.length,
+            processedCount,
             skippedIds
         });
     } catch (error) {

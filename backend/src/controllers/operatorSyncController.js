@@ -1,14 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
-};
-
-// HELPER: Generates a fallback operator reference ID if the payload doesn't supply one
-const generateOperatorRef = (name) => {
-    if (!name) return 'CEV';
-    return name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'CEV';
 };
 
 // MAIN SYNC OPERATOR CONTROLLER
@@ -54,88 +49,36 @@ exports.syncOperatorData = async (req, res) => {
         }
 
         const embeddedOperator = payload.operator || locationsToSync[0]?.operator || {};
-        let company;
 
-        if (isMasterKey) {
-            // Resolve (or auto-provision) the target operator by operator_reference_id/name.
-            const operatorName = embeddedOperator.name || payload.name || null;
-            const operatorRefId = payload.operator_reference_id || embeddedOperator.operator_reference_id || (operatorName ? generateOperatorRef(operatorName) : null);
-            const contactEmail = embeddedOperator.email || payload.email || (operatorRefId ? `contact@${operatorRefId.slice(0, 8).toLowerCase()}.com` : null);
+        const resolution = await resolveOperatorCompany({
+            payload,
+            embeddedOperator,
+            isMasterKey,
+            partnerCompanyId: req.partnerCompanyId,
+            clientIp
+        });
 
-            if (!operatorRefId && !operatorName) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Validation Error: A master-key sync requires 'operator_reference_id' or an 'operator.name' to identify the target operator."
-                });
-            }
-
-            company = await prisma.company.findFirst({
-                where: {
-                    OR: [
-                        ...(operatorRefId ? [{ operatorReferenceId: operatorRefId }] : []),
-                        ...(operatorName ? [{ name: operatorName }] : [])
-                    ]
-                }
+        if (resolution.error) {
+            return res.status(resolution.suspended ? 403 : 400).json({
+                success: false,
+                message: resolution.suspended ? `Forbidden: ${resolution.error}` : `Validation Error: ${resolution.error}`
             });
+        }
 
-            if (!company) {
-                company = await prisma.company.create({
-                    data: {
-                        name: operatorName || operatorRefId,
-                        operatorReferenceId: operatorRefId,
-                        contactEmail: contactEmail || `contact@${(operatorRefId || 'operator').toLowerCase()}.com`,
-                        status: 'ACTIVE'
-                    }
-                });
+        if (!resolution.company) {
+            return res.status(404).json({
+                success: false,
+                message: "The company associated with this API key could not be found."
+            });
+        }
 
-                await prisma.auditLog.create({
-                    data: {
-                        action: 'CREATE',
-                        entity: 'COMPANY',
-                        entityId: company.id,
-                        details: `Auto-provisioned operator company "${company.name}" (Ref: ${operatorRefId}) via master-key partner sync.`,
-                        ipAddress: clientIp
-                    }
-                });
-            } else {
-                if (company.status === 'SUSPENDED') {
-                    return res.status(403).json({
-                        success: false,
-                        message: `Forbidden: Operator "${company.name}" is currently suspended and cannot be synced.`
-                    });
-                }
+        let company = resolution.company;
 
-                const updateData = {};
-                if (operatorName && operatorName !== company.name) updateData.name = operatorName;
-                if (contactEmail && contactEmail !== company.contactEmail) updateData.contactEmail = contactEmail;
-                if (operatorRefId && !company.operatorReferenceId) updateData.operatorReferenceId = operatorRefId;
-
-                if (Object.keys(updateData).length > 0) {
-                    company = await prisma.company.update({ where: { id: company.id }, data: updateData });
-
-                    await prisma.auditLog.create({
-                        data: {
-                            action: 'UPDATE',
-                            entity: 'COMPANY',
-                            entityId: company.id,
-                            details: `Master-key partner sync updated operator company "${company.name}" metadata.`,
-                            ipAddress: clientIp
-                        }
-                    });
-                }
-            }
-        } else {
-            // Regular key: strictly confined to its own company, ignoring any
-            // operator_reference_id/name in the payload for resolution purposes.
-            company = await prisma.company.findUnique({ where: { id: req.partnerCompanyId } });
-
-            if (!company) {
-                return res.status(404).json({
-                    success: false,
-                    message: "The company associated with this API key could not be found."
-                });
-            }
-
+        if (!isMasterKey) {
+            // Regular key: additionally allow updating its own company's display
+            // name/contact email from the payload - unrelated to the operator
+            // resolution above, which for a regular key always just returns its
+            // own existing company untouched.
             const newName = embeddedOperator.name || payload.name;
             const newEmail = embeddedOperator.email || payload.email;
 

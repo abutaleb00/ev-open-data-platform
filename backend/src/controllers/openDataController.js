@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
 const { hashApiKey, encryptApiKey, decryptApiKey } = require('../utils/apiKeyHash');
+const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -788,11 +789,34 @@ exports.getDashboardTariffsPreview = async (req, res) => {
 exports.ingestExternalData = async (req, res) => {
     try {
         const locations = req.body.data;
-        const companyId = req.partnerCompanyId;
 
         if (!Array.isArray(locations)) {
             return res.status(400).json({ success: false, message: "Invalid payload layout: 'data' must be an array." });
         }
+
+        // A master key may target/auto-provision the operator named by
+        // operator_reference_id/operator.name (see resolveOperatorCompany) - a
+        // regular key stays confined to its own existing company, exactly as
+        // before. This mirrors syncOperatorData so partners only need this one
+        // endpoint regardless of key type.
+        const embeddedOperator = req.body.operator || locations[0]?.operator || {};
+        const resolution = await resolveOperatorCompany({
+            payload: req.body,
+            embeddedOperator,
+            isMasterKey: req.isMasterKey === true,
+            partnerCompanyId: req.partnerCompanyId,
+            clientIp: getClientIp(req)
+        });
+
+        if (resolution.error) {
+            return res.status(resolution.suspended ? 403 : 400).json({ success: false, message: resolution.error });
+        }
+
+        if (!resolution.company) {
+            return res.status(404).json({ success: false, message: "The company associated with this API key could not be found." });
+        }
+
+        const companyId = resolution.company.id;
 
         const skippedIds = [];
         let processedCount = 0;

@@ -37,14 +37,19 @@ exports.syncOperatorData = async (req, res) => {
             });
         }
 
+        // Accepts 'location'/'locations' (OCPI-style) as well as 'data' (the same array
+        // key used by the standard ingest payload format) so partners don't need a
+        // different payload shape just because a request needs operator auto-provisioning.
         const locationsToSync = Array.isArray(payload.location)
             ? payload.location
-            : (Array.isArray(payload.locations) ? payload.locations : []);
+            : (Array.isArray(payload.locations)
+                ? payload.locations
+                : (Array.isArray(payload.data) ? payload.data : []));
 
         if (locationsToSync.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: "Validation Error: Payload must contain a non-empty 'location' or 'locations' array."
+                message: "Validation Error: Payload must contain a non-empty 'location', 'locations', or 'data' array."
             });
         }
 
@@ -162,7 +167,9 @@ exports.syncOperatorData = async (req, res) => {
         const locationsSynced = [];
 
         for (const locPayload of locationsToSync) {
-            const locUid = locPayload.id || `loc_${company.id}_${locationsSynced.length}`;
+            const locUid = (locPayload.id !== undefined && locPayload.id !== null && String(locPayload.id).trim() !== '')
+                ? String(locPayload.id).trim()
+                : `loc_${company.id}_${locationsSynced.length}`;
             const lat = locPayload.coordinates?.latitude ? parseFloat(locPayload.coordinates.latitude) : 0.0;
             const lng = locPayload.coordinates?.longitude ? parseFloat(locPayload.coordinates.longitude) : 0.0;
 

@@ -801,6 +801,10 @@ exports.ingestExternalData = async (req, res) => {
             // Location IDs are partner-controlled and OCPI-shaped (GUIDs, not necessarily
             // numeric) - match on the dedicated locationUid string column, same pattern as
             // ChargePoint.hardwareId below. The internal `id` stays a plain autoincrement PK.
+            // locationUid is only unique per-company (not globally) - different operators
+            // legitimately reuse the same partner-side ID text, so the compound key below
+            // makes cross-tenant collisions structurally impossible rather than something
+            // to detect and skip.
             const externalLocId = (loc.id !== undefined && loc.id !== null) ? String(loc.id).trim() : "";
 
             if (!externalLocId) {
@@ -808,20 +812,8 @@ exports.ingestExternalData = async (req, res) => {
                 continue;
             }
 
-            // Refuse to touch a record ID that already belongs to a different tenant -
-            // partner-supplied IDs must never be trusted to cross tenants.
-            const existingLocation = await prisma.location.findUnique({
-                where: { locationUid: externalLocId },
-                select: { companyId: true }
-            });
-
-            if (existingLocation && existingLocation.companyId !== companyId) {
-                skippedIds.push({ id: externalLocId, reason: "ID belongs to another operator" });
-                continue;
-            }
-
             const savedLocation = await prisma.location.upsert({
-                where: { locationUid: externalLocId },
+                where: { companyId_locationUid: { companyId, locationUid: externalLocId } },
                 update: {
                     name: loc.name,
                     address: loc.address,

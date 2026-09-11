@@ -1,3 +1,6 @@
 # Claude Code agent guidance/config - kept local, not pushed to the shared repo
 CLAUDE.md
 .claude/
+
+# Docker Compose env file (real secrets) - see .env.docker.example for the template
+.env

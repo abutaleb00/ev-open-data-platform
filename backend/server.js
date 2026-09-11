@@ -44,7 +44,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // 4. PRODUCTION EXPRESS CROSS-ORIGIN RESOURCE SHARING POLICY
 const allowedOrigins = [
-    'https://evopen.maanrishfaxyz.xyz', // Your primary production frontend link
+    'https://evopen.co.uk',              // Production frontend
+    'https://www.evopen.co.uk',
     'http://localhost:3000',             // Local development server fallback path
     'http://127.0.0.1:3000'
 ];

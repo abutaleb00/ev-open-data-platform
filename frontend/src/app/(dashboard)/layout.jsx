@@ -122,10 +122,7 @@ export default function DashboardLayout({ children }) {
 
         authorizedMenu.forEach(item => {
             if (item.submenu) {
-                const hasActiveChild = item.submenu.some(sub => {
-                    const cleanSub = sub.href.replace(/\/\(dashboard\)/, '');
-                    return pathname === cleanSub || pathname.startsWith(cleanSub + '/');
-                });
+                const hasActiveChild = item.submenu.some(sub => isPathActive(sub.href));
                 if (hasActiveChild) {
                     setOpenSubmenu(item.label);
                 }
@@ -204,6 +201,15 @@ export default function DashboardLayout({ children }) {
         router.push('/login');
     };
 
+    // Normalizes trailing slashes on both sides before comparing, since the static
+    // export (trailingSlash: true) can produce pathnames like "/locations/".
+    const isPathActive = (href) => {
+        const normalize = (p) => (p.length > 1 ? p.replace(/\/$/, '') : p);
+        const cleanHref = normalize(href);
+        const cleanPathname = normalize(pathname);
+        return cleanPathname === cleanHref || cleanPathname.startsWith(cleanHref + '/');
+    };
+
     const handleSubmenuToggle = (label) => {
         if (isCollapsed) setIsCollapsed(false);
         setOpenSubmenu(openSubmenu === label ? null : label);
@@ -264,13 +270,9 @@ export default function DashboardLayout({ children }) {
                         {authorizedMenu.map((item) => {
                             const Icon = item.icon;
 
-                            const cleanItemHref = item.href ? item.href.replace(/\/\(dashboard\)/, '') : '';
-                            const isActiveLink = !item.submenu && (pathname === cleanItemHref || pathname.startsWith(cleanItemHref + '/'));
+                            const isActiveLink = !item.submenu && item.href && isPathActive(item.href);
 
-                            const isSubmenuActive = item.submenu && item.submenu.some(sub => {
-                                const cleanSubHref = sub.href.replace(/\/\(dashboard\)/, '');
-                                return pathname === cleanSubHref || pathname.startsWith(cleanSubHref + '/');
-                            });
+                            const isSubmenuActive = item.submenu && item.submenu.some(sub => isPathActive(sub.href));
 
                             const isExpanded = openSubmenu === item.label;
 
@@ -297,8 +299,7 @@ export default function DashboardLayout({ children }) {
                                             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-72 mt-1 opacity-100' : 'max-h-0 opacity-0'}`}>
                                                 <div className="pl-4 pr-2 py-1 space-y-1 border-l border-slate-800 ml-5">
                                                     {item.submenu.map((sub) => {
-                                                        const cleanSubPath = sub.href.replace(/\/\(dashboard\)/, '');
-                                                        const isSubActive = pathname === cleanSubPath || pathname.startsWith(cleanSubPath + '/');
+                                                        const isSubActive = isPathActive(sub.href);
 
                                                         return (
                                                             <Link

@@ -13,12 +13,40 @@ export default function Header() {
     
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
+    const [activeSection, setActiveSection] = useState('hero');
+
     const dropdownRef = useRef(null);
 
     // Auto-close mobile drawer viewport on standard path page route updates
     useEffect(() => {
         setIsMobileMenuOpen(false);
+    }, [pathname]);
+
+    // Scroll-spy: highlight whichever same-page section is currently in view.
+    // Only relevant on the home page, where these sections actually exist.
+    useEffect(() => {
+        if (pathname !== '/') return;
+
+        const sectionIds = ['hero', 'features', 'how-it-works', 'compliance'];
+        const sections = sectionIds
+            .map((id) => document.getElementById(id))
+            .filter(Boolean);
+
+        if (sections.length === 0) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        setActiveSection(entry.target.id);
+                    }
+                });
+            },
+            { rootMargin: '-40% 0px -55% 0px', threshold: 0 }
+        );
+
+        sections.forEach((section) => observer.observe(section));
+        return () => observer.disconnect();
     }, [pathname]);
 
     // Close profile menu dropdown when clicking outside of it
@@ -56,6 +84,14 @@ export default function Header() {
         { label: 'Public Map', href: '/open-data', colorClass: 'hover:text-indigo-600' },
     ];
 
+    const isLinkActive = (link) => {
+        if (link.href.includes('#')) {
+            const sectionId = link.href.split('#')[1];
+            return pathname === '/' && activeSection === sectionId;
+        }
+        return pathname === link.href || pathname === `${link.href}/`;
+    };
+
     return (
         <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/60 select-none">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
@@ -71,16 +107,23 @@ export default function Header() {
                 </Link>
 
                 {/* Desktop Semantic Navigation Paths */}
-                <nav className="hidden md:flex items-center space-x-6 lg:space-x-8 text-sm font-bold text-slate-600">
-                    {NAV_LINKS.map((link) => (
-                        <Link 
-                            key={link.label} 
-                            href={link.href} 
-                            className={`transition-colors ${link.colorClass || 'hover:text-[#FFAF00]'}`}
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
+                <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-bold">
+                    {NAV_LINKS.map((link) => {
+                        const isActive = isLinkActive(link);
+
+                        return (
+                            <Link
+                                key={link.label}
+                                href={link.href}
+                                className={`px-3 py-2 rounded-lg transition-colors ${isActive
+                                        ? 'bg-[#FFAF00] text-white font-black'
+                                        : `text-slate-600 ${link.colorClass || 'hover:text-[#FFAF00]'}`
+                                    }`}
+                            >
+                                {link.label}
+                            </Link>
+                        );
+                    })}
                 </nav>
 
                 {/* Desktop & Mobile Action Deck */}
@@ -166,16 +209,23 @@ export default function Header() {
             {isMobileMenuOpen && (
                 <div className="md:hidden fixed inset-x-0 top-20 bg-white border-b border-slate-200 shadow-xl animate-in slide-in-from-top duration-200 z-40 max-h-[calc(100vh-5rem)] overflow-y-auto">
                     <div className="px-6 py-6 space-y-4 flex flex-col">
-                        {NAV_LINKS.map((link) => (
-                            <Link
-                                key={link.label}
-                                href={link.href}
-                                onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED: Force hides menu upon clicking anchor scroll targets
-                                className="text-sm font-bold text-slate-700 hover:text-[#FFAF00] transition-colors py-1"
-                            >
-                                {link.label}
-                            </Link>
-                        ))}
+                        {NAV_LINKS.map((link) => {
+                            const isActive = isLinkActive(link);
+
+                            return (
+                                <Link
+                                    key={link.label}
+                                    href={link.href}
+                                    onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED: Force hides menu upon clicking anchor scroll targets
+                                    className={`text-sm font-bold transition-colors py-2 px-3 rounded-lg ${isActive
+                                            ? 'bg-[#FFAF00] text-white font-black'
+                                            : 'text-slate-700 hover:text-[#FFAF00]'
+                                        }`}
+                                >
+                                    {link.label}
+                                </Link>
+                            );
+                        })}
                         
                         {/* Public Auth Redirection Loops inside Mobile Viewport */}
                         {!token && (

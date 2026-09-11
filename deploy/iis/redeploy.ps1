@@ -8,21 +8,33 @@ param(
     [string]$RepoRoot = "C:\evopen"
 )
 
-$ErrorActionPreference = "Stop"
+# Deliberately NOT using $ErrorActionPreference = "Stop": PowerShell (especially over
+# PSRemoting) treats a native command's normal stderr output - which git and npm both
+# use for routine progress/warnings - as a terminating error under that setting, aborting
+# the script even though the command actually succeeded. Native command failures are
+# instead detected explicitly via $LASTEXITCODE below.
 
 function Write-Step($msg) {
     Write-Host ""
     Write-Host "=== $msg ===" -ForegroundColor Cyan
 }
 
+function Invoke-Checked($description) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "$description failed with exit code $LASTEXITCODE"
+    }
+}
+
 Write-Step "Pulling latest code"
 Set-Location $RepoRoot
-git pull origin main
+git pull origin main 2>&1 | Write-Host
+Invoke-Checked "git pull"
 
 # --- Backend ---
 Write-Step "Backend: installing dependencies"
 Set-Location "$RepoRoot\backend"
-npm install --omit=dev
+npm install --omit=dev 2>&1 | Write-Host
+Invoke-Checked "backend npm install"
 
 # npm's install-script allowlist blocks postinstall/preinstall scripts for packages it
 # doesn't recognize yet (see npm warn allow-scripts). Prisma's postinstall fetches its
@@ -30,18 +42,21 @@ npm install --omit=dev
 # them to actually run via `npm rebuild` (approve-scripts alone doesn't re-trigger
 # scripts on already-installed packages). Update this list if new scripted deps are added.
 Write-Step "Backend: approving and running required install scripts"
-npm approve-scripts "@prisma/client" "@prisma/engines" "@scarf/scarf" "prisma" 2>$null
-npm rebuild
+npm approve-scripts "@prisma/client" "@prisma/engines" "@scarf/scarf" "prisma" 2>&1 | Write-Host
+npm rebuild 2>&1 | Write-Host
+Invoke-Checked "backend npm rebuild"
 
 Write-Step "Backend: generating Prisma Client"
-npx prisma generate
+npx prisma generate 2>&1 | Write-Host
+Invoke-Checked "prisma generate"
 
 Write-Step "Backend: applying schema changes (prisma db push)"
 Write-Host "If this prompts for --accept-data-loss, STOP and review what it would drop before re-running with that flag manually." -ForegroundColor Yellow
-npx prisma db push
+npx prisma db push 2>&1 | Write-Host
+Invoke-Checked "prisma db push"
 
 Write-Step "Backend: restarting Windows service"
-Restart-Service evopen-backend
+Restart-Service evopen-backend -ErrorAction Stop
 Start-Sleep -Seconds 3
 $svc = Get-Service evopen-backend
 if ($svc.Status -ne "Running") {
@@ -57,17 +72,19 @@ try {
 # --- Frontend ---
 Write-Step "Frontend: installing dependencies"
 Set-Location "$RepoRoot\frontend"
-npm install
+npm install 2>&1 | Write-Host
+Invoke-Checked "frontend npm install"
 
 Write-Step "Frontend: approving and running required install scripts"
-npm approve-scripts "sharp" "unrs-resolver" 2>$null
-npm rebuild sharp unrs-resolver 2>$null
+npm approve-scripts "sharp" "unrs-resolver" 2>&1 | Write-Host
+npm rebuild sharp unrs-resolver 2>&1 | Write-Host
 
 Write-Step "Frontend: building static export"
 if (-not (Test-Path ".env")) {
     throw "frontend\.env is missing (needs NEXT_PUBLIC_API_URL) - see docs/DEPLOYMENT_IIS.md section 4."
 }
-npm run build
+npm run build 2>&1 | Write-Host
+Invoke-Checked "frontend build"
 
 if (-not (Test-Path "out\index.html")) {
     throw "Build did not produce out\index.html - check the build output above."

@@ -28,7 +28,33 @@ Install on the Windows Server (all one-time):
    ALTER ROLE db_owner ADD MEMBER evopen_app;
    ```
 5. **NSSM** (https://nssm.cc/) — used to run the Node backend as a Windows service. Extract `nssm.exe` somewhere on `PATH`.
-6. **win-acme** (https://www.win-acme.com/) — free ACME/Let's Encrypt client with native IIS integration, used for TLS certs in step 7.
+6. **simple-acme** (https://www.simple-acme.com/, formerly "win-acme" — same tool, same `wacs.exe`, rebranded) — free ACME/Let's Encrypt client with native IIS integration, used for TLS certs in step 9. Via winget: `winget install --id simple-acme.simple-acme -e`.
+
+All six of the above (except SQL Server's manual EULA/auth steps) install cleanly via `winget`:
+```powershell
+winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements
+winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements
+winget install --id NSSM.NSSM -e --silent --accept-package-agreements --accept-source-agreements
+winget install --id simple-acme.simple-acme -e --silent --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.IIS.URLRewrite -e --silent --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.IIS.ApplicationRequestRouting -e --silent --accept-package-agreements --accept-source-agreements
+```
+If `winget install` fails with "Failed when opening source(s)", run `winget source reset --force` first.
+
+**SQL Server Express**: the small web-installer bootstrapper (`SQL20XX-SSEI-Expr.exe`, what `winget install --id Microsoft.SQLServer.2022.Express` fetches) is a GUI/WinForms tool — running it over a remote/non-interactive PowerShell session (`Invoke-Command`) can silently hang or die with no error. Download and run the full offline installer instead, and do it from an actual interactive session (RDP console, not remoted):
+```powershell
+Invoke-WebRequest -Uri "https://download.microsoft.com/download/3/8/d/38de7036-2433-4207-8eae-06e247e17b25/SQLEXPR_x64_ENU.exe" -OutFile "C:\SQLEXPR_x64_ENU.exe"
+C:\SQLEXPR_x64_ENU.exe /QUIET /ACTION=Install /IACCEPTSQLSERVERLICENSETERMS /INSTANCENAME=SQLEXPRESS /SECURITYMODE=SQL /SAPWD=<StrongPassword> /SQLSYSADMINACCOUNTS=BUILTIN\Administrators /TCPENABLED=1 /FEATURES=SQLENGINE
+```
+This installs a **named instance** (`SQLEXPRESS`) with mixed-mode auth and TCP/IP enabled — but named instances default to a **dynamic port**, and Prisma's `sqlserver://` connection string needs a fixed `host:port` (it doesn't do SQL Browser/instance-name resolution). Pin it to the standard port and open it locally:
+```powershell
+$regPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL16.SQLEXPRESS\MSSQLServer\SuperSocketNetLib\Tcp\IPAll"
+Set-ItemProperty -Path $regPath -Name "TcpDynamicPorts" -Value ""
+Set-ItemProperty -Path $regPath -Name "TcpPort" -Value "1433"
+Restart-Service "MSSQL`$SQLEXPRESS" -Force
+New-NetFirewallRule -DisplayName "SQL Server TCP 1433" -Direction Inbound -Protocol TCP -LocalPort 1433 -Action Allow -Profile Any
+```
+(That firewall rule only matters for connections from *other* machines — a local `localhost:1433` connection works regardless. Skip it if the app only ever connects locally.)
 
 ## 2. Firewall
 
@@ -67,6 +93,14 @@ Set in `backend\.env`:
 ```powershell
 cd C:\evopen\backend
 npm install --omit=dev
+```
+Modern npm gates lifecycle scripts for packages it doesn't recognize yet (`npm warn allow-scripts ...`) — Prisma's `postinstall` (fetches its query engine binaries) is one of them, and won't run without explicit approval. Approve and trigger it:
+```powershell
+npm approve-scripts "@prisma/client" "@prisma/engines" "@scarf/scarf" "prisma"
+npm rebuild
+```
+(`npm approve-scripts` alone doesn't retroactively run scripts on already-installed packages — `npm rebuild` is what actually triggers them.) Then generate the client and apply the schema:
+```powershell
 npx prisma generate
 npx prisma db push
 ```
@@ -95,9 +129,14 @@ notepad .env
 Set `NEXT_PUBLIC_API_URL=https://api.evopen.co.uk/api/v1` in `frontend\.env` (the same file `src/lib/axios.js` reads from, per `CLAUDE.md`), then:
 ```powershell
 npm install
+```
+Same `allow-scripts` gate as the backend applies here too (`sharp` and `unrs-resolver`):
+```powershell
+npm approve-scripts "sharp" "unrs-resolver"
+npm rebuild sharp unrs-resolver
 npm run build
 ```
-This produces `frontend\out`, including `web.config` (copied automatically from `frontend\public\web.config` by Next's static export — it configures the default document and a custom 404 page).
+This produces `frontend\out`, including `web.config` (copied automatically from `frontend\public\web.config` by Next's static export — it configures the default document and a custom 404 page; deliberately has **no** `staticContent`/mimeType overrides — `.json` and `.webmanifest` are already registered at the applicationHost.config level on IIS, and redeclaring them at the site level throws a 500.19 lock-violation error).
 
 ## 8. Create the IIS sites
 
@@ -109,14 +148,14 @@ This installs the IIS role/features, enables ARR's proxy mode, and creates both 
 
 At this point `http://evopen.co.uk` and `http://api.evopen.co.uk` should already work over plain HTTP — verify before moving to TLS.
 
-## 9. TLS via win-acme
+## 9. TLS via simple-acme
 
-Run `wacs.exe` (win-acme) interactively, or scripted:
+Run `wacs.exe` interactively, or scripted (fully unattended, no prompts):
 ```powershell
-wacs.exe --target iissite --siteid <evopen-frontend-site-id> --host evopen.co.uk,www.evopen.co.uk --installation iis
-wacs.exe --target iissite --siteid <evopen-api-site-id> --installation iis
+wacs.exe --target iissite --siteid <evopen-frontend-site-id> --host "evopen.co.uk,www.evopen.co.uk" --installation iis --accepttos --emailaddress "you@example.com" --closeonfinish
+wacs.exe --target iissite --siteid <evopen-api-site-id> --host "api.evopen.co.uk" --installation iis --accepttos --emailaddress "you@example.com" --closeonfinish
 ```
-(Get site IDs with `Get-Website | Select Name, Id`.) win-acme adds the HTTPS bindings and certificates to each site automatically, and registers a scheduled task for renewal — no manual cert management afterward.
+(Get site IDs with `Get-Website | Select Name, Id`.) `wacs.exe` is a console app, so unlike the SQL Server installer this runs fine over a remote/non-interactive session. It adds the HTTPS bindings and certificates to each site automatically, and registers a scheduled task for renewal — no manual cert management afterward.
 
 ## 10. Verify
 
@@ -129,19 +168,11 @@ wacs.exe --target iissite --siteid <evopen-api-site-id> --installation iis
 
 ```powershell
 cd C:\evopen
-git pull origin main
-
-cd backend
-npm install --omit=dev
-npx prisma generate
-npx prisma db push
-Restart-Service evopen-backend
-
-cd ..\frontend
-npm install
-npm run build   # NEXT_PUBLIC_API_URL must still be set correctly in frontend\.env
+.\deploy\iis\redeploy.ps1 -RepoRoot "C:\evopen"
 ```
-The frontend site's physical path already points at `frontend\out`, so a fresh `npm run build` is live immediately — no IIS restart needed for frontend-only changes.
+This automates every step above for a code update: `git pull`, backend `npm install` + the `allow-scripts` approve/rebuild dance + `prisma generate` + `prisma db push` + service restart + a health check, then frontend `npm install` + rebuild + `npm run build`. It's safe to re-run. If a schema change would need `--accept-data-loss`, the script deliberately does **not** pass that flag automatically — it'll stop with Prisma's prompt/output so you can review what it would drop before re-running `npx prisma db push --accept-data-loss` manually in `backend/`.
+
+The frontend site's physical path already points at `frontend\out`, so the rebuild is live immediately — no IIS restart needed for frontend-only changes.
 
 ## 12. Backups
 
@@ -155,8 +186,7 @@ Also back up `backend\uploads\` (location/EVSE images) — it's not tracked in g
 
 ```powershell
 git checkout <previous-commit-or-tag>
-cd backend; npm install --omit=dev; npx prisma generate; Restart-Service evopen-backend
-cd ..\frontend; npm install; npm run build
+.\deploy\iis\redeploy.ps1 -RepoRoot "C:\evopen"
 ```
 To restore a database backup:
 ```sql

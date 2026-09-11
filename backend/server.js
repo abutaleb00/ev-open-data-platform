@@ -5,7 +5,7 @@ const path = require('path');
 
 // --- SECURITY MODULE IMPORTS ---
 const helmet = require('helmet');
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 dotenv.config();
 
@@ -24,11 +24,25 @@ app.use(helmet({
 
 // 2. RESOURCE SCRAPING & DOS FLOOD PROTECTOR RATE LIMITER
 // With 'trust proxy' turned active, this will rate limit by actual browser IPs instead of the loopback gateway
+// IIS's Application Request Routing (used by the IIS/Windows deployment) appends the client's
+// source port to X-Forwarded-For (e.g. "1.2.3.4:56789"), which fails express-rate-limit's strict
+// IP validation and would otherwise key the limiter by ip:port instead of ip - letting a single
+// client bypass the limit just by opening new connections. Strip that suffix before keying.
+const stripForwardedPort = (ip) => {
+    if (!ip) return ip;
+    const bracketedIpv6WithPort = ip.match(/^\[(.+)\]:\d+$/);
+    if (bracketedIpv6WithPort) return bracketedIpv6WithPort[1];
+    const ipv4WithPort = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+$/);
+    if (ipv4WithPort) return ipv4WithPort[1];
+    return ip;
+};
+
 const globalRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 Minute window block
     max: 300, // Limits each individual client IP to 300 hits per window block
     standardHeaders: 'draft-7', // Returns standardized rate limit info flags in headers
     legacyHeaders: false, // Disables old X-RateLimit-* tracking headers
+    keyGenerator: (req) => ipKeyGenerator(stripForwardedPort(req.ip)),
     message: {
         success: false,
         message: "Too many automated application requests emitted from this network node. Access frozen temporarily."

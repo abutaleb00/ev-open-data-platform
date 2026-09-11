@@ -23,18 +23,18 @@ export default function Compliance() {
                             className="text-emerald-400" 
                             style={{ animation: 'spin 8s linear infinite' }} 
                         />
-                        <span>Roaming Grid Compliance Sync</span>
+                        <span>Industry Standard, Built In</span>
                     </div>
                     
                     <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.15]">
-                        Structured Open <br className="hidden lg:block"/>
+                        Speaks the Same <br className="hidden lg:block"/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-300 to-emerald-400">
-                            Compliance Standards
+                            Language as the Industry
                         </span>
                     </h2>
-                    
+
                     <p className="text-xs sm:text-sm text-slate-400 font-medium leading-relaxed max-w-xl mx-auto lg:mx-0">
-                        Our data platform matches standard Open Charge Point Interface (OCPI) protocols natively. We erase point-of-interest fragmentation across map directories, vehicle navigation engines, and roaming clearhouses worldwide.
+                        Built natively on the Open Charge Point Interface (OCPI) standard. Publish once, and appear consistently across maps, EV routing apps, and roaming networks — no bespoke integration per partner.
                     </p>
 
                     <div className="pt-4 space-y-4 text-left max-w-md mx-auto lg:mx-0">
@@ -43,18 +43,18 @@ export default function Compliance() {
                                 <CheckCircle2 size={16} className="text-emerald-400" />
                             </div>
                             <div>
-                                <p className="text-xs sm:text-sm font-bold text-slate-200">Full Entity Relational Hierarchies</p>
-                                <p className="text-[11px] font-medium text-slate-500 mt-0.5">Strictly aggregates matching Country Code, Party, Location, EVSE, and Connector indexes.</p>
+                                <p className="text-xs sm:text-sm font-bold text-slate-200">Complete OCPI Data Model</p>
+                                <p className="text-[11px] font-medium text-slate-500 mt-0.5">Country code, party, location, EVSE and connector — all properly linked, not flattened.</p>
                             </div>
                         </div>
-                        
+
                         <div className="flex items-start p-3 bg-slate-900/30 border border-slate-800/40 rounded-2xl hover:bg-slate-900/50 transition-colors">
                             <div className="p-1.5 bg-amber-500/10 rounded-xl border border-amber-500/20 mr-4 shrink-0">
                                 <CheckCircle2 size={16} className="text-amber-400" />
                             </div>
                             <div>
-                                <p className="text-xs sm:text-sm font-bold text-slate-200">Live Status Loop Synchronization</p>
-                                <p className="text-[11px] font-medium text-slate-500 mt-0.5">Pulsing telemetry triggers (Available, Occupied, Faulted) directly to client maps.</p>
+                                <p className="text-xs sm:text-sm font-bold text-slate-200">Live Connector Status</p>
+                                <p className="text-[11px] font-medium text-slate-500 mt-0.5">Available, Occupied and Faulted states update in real time, straight to your consumers.</p>
                             </div>
                         </div>
                     </div>
@@ -69,9 +69,9 @@ export default function Compliance() {
                             <BarChart3 size={20} />
                         </div>
                         <div className="mt-6">
-                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-amber-300 transition-colors">Live Billing Insights</h4>
+                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-amber-300 transition-colors">Transparent Tariffs</h4>
                             <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 leading-relaxed">
-                                Stream complete element and price component definitions array items to match roaming transaction requests.
+                                Full price component breakdowns published in the standard OCPI tariff format roaming partners already expect.
                             </p>
                         </div>
                     </div>
@@ -82,9 +82,9 @@ export default function Compliance() {
                             <Users size={20} />
                         </div>
                         <div className="mt-6">
-                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-emerald-300 transition-colors">Multi-Tenant Boundaries</h4>
+                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-emerald-300 transition-colors">True Multi-Tenancy</h4>
                             <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 leading-relaxed">
-                                Isolate operator spaces cleanly using cryptographic access keys, preventing payload contamination.
+                                Every operator's data is fully isolated behind its own access keys — no risk of one network seeing another's data.
                             </p>
                         </div>
                     </div>
@@ -95,9 +95,9 @@ export default function Compliance() {
                             <Cpu size={20} />
                         </div>
                         <div className="mt-6">
-                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-indigo-300 transition-colors">Asynchronous Engine</h4>
+                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-indigo-300 transition-colors">Built to Scale</h4>
                             <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 leading-relaxed">
-                                High-performance queries optimized for high-volume database reading directly inside platform structures.
+                                A query layer designed for growth — from your first location to a national charging network.
                             </p>
                         </div>
                     </div>
@@ -108,9 +108,9 @@ export default function Compliance() {
                             <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
                         </div>
                         <div className="mt-6">
-                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-amber-300 transition-colors">Real-Time Sync</h4>
+                            <h4 className="text-sm sm:text-base font-black text-white group-hover:text-amber-300 transition-colors">Instant Updates</h4>
                             <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 leading-relaxed">
-                                Eliminates static parsing lag completely. What you modify inside dashboards updates the streaming pipeline instantly.
+                                Change a location or tariff in your dashboard and it reflects on the public feed immediately — no rebuild, no delay.
                             </p>
                         </div>
                     </div>

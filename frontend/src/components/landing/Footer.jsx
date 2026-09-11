@@ -24,14 +24,14 @@ export default function Footer() {
                             <span className="text-xl font-black text-white tracking-tight">EV DATA HUB</span>
                         </div>
                         <p className="text-xs font-medium text-slate-400 leading-relaxed max-w-sm">
-                            The definitive real-time orchestration stack for modern electric vehicle roaming grids. Standardizing telemetry delivery, active tariff bounds, and hardware state streams.
+                            A multi-tenant platform for EV charge point operators to manage their infrastructure and publish an open, OCPI-compliant data feed for maps, apps and roaming partners.
                         </p>
 
                         {/* Live Micro Status Block */}
                         <div className="inline-flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
                             <span className="h-2 w-2 bg-[#73CB44] rounded-full animate-pulse" />
                             <span className="text-[11px] font-mono font-bold text-slate-300">API Pipeline:</span>
-                            <span className="text-[11px] font-mono font-black text-[#73CB44]">99.98% Operational</span>
+                            <span className="text-[11px] font-mono font-black text-[#73CB44]">Operational</span>
                         </div>
                     </div>
 
@@ -41,7 +41,7 @@ export default function Footer() {
                         {/* Stream Core Cluster */}
                         <div className="space-y-4">
                             <h4 className="text-xs font-black uppercase text-slate-200 tracking-widest flex items-center">
-                                <Terminal size={12} className="mr-1.5 text-[#FFAF00]" /> Open Telemetry
+                                <Terminal size={12} className="mr-1.5 text-[#FFAF00]" /> Open Data API
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
                                 <li>
@@ -56,7 +56,6 @@ export default function Footer() {
                                         Tariffs JSON Feed
                                     </a>
                                 </li>
-                                <li><span className="text-slate-600 flex items-center"><span className="h-1 w-1 bg-slate-800 rounded-full mr-2" />GraphQL Mesh</span></li>
                             </ul>
                         </div>
 
@@ -103,7 +102,7 @@ export default function Footer() {
                 {/* Bottom Base Legal Bar */}
                 <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-bold text-slate-500">
                     <div className="flex flex-col md:flex-row items-center gap-2 md:gap-6 text-center md:text-left">
-                        <p>© 2026 EV Data Hub Open Source Platform Architecture.</p>
+                        <p>© {new Date().getFullYear()} EV Data Hub. All rights reserved.</p>
                         <div className="flex space-x-4 text-slate-600">
                             <span className="hover:text-slate-400 cursor-pointer transition-colors">Privacy Rules</span>
                             <span>•</span>

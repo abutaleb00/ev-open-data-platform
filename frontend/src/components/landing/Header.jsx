@@ -50,9 +50,8 @@ export default function Header() {
     };
 
     const NAV_LINKS = [
-        { label: 'Home', href: '/#hero' },
         { label: 'Features', href: '/#features' },
-        { label: 'Impact Data', href: '/#stats' },
+        { label: 'How It Works', href: '/#how-it-works' },
         { label: 'OCPI Standard', href: '/#compliance', colorClass: 'hover:text-[#73CB44]' },
         { label: 'Public Map', href: '/open-data', colorClass: 'hover:text-indigo-600' },
     ];

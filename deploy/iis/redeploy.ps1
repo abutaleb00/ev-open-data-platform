@@ -31,6 +31,13 @@ git pull origin main 2>&1 | Write-Host
 Invoke-Checked "git pull"
 
 # --- Backend ---
+# Stop the service before touching node_modules/prisma - the running Node process holds
+# the Prisma query engine DLL open, and `prisma generate` fails with EPERM trying to
+# replace it while that lock is held. Confirmed live on the first real redeploy run.
+Write-Step "Backend: stopping Windows service"
+Stop-Service evopen-backend -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
 Write-Step "Backend: installing dependencies"
 Set-Location "$RepoRoot\backend"
 npm install --omit=dev 2>&1 | Write-Host
@@ -55,8 +62,8 @@ Write-Host "If this prompts for --accept-data-loss, STOP and review what it woul
 npx prisma db push 2>&1 | Write-Host
 Invoke-Checked "prisma db push"
 
-Write-Step "Backend: restarting Windows service"
-Restart-Service evopen-backend -ErrorAction Stop
+Write-Step "Backend: starting Windows service"
+Start-Service evopen-backend -ErrorAction Stop
 Start-Sleep -Seconds 3
 $svc = Get-Service evopen-backend
 if ($svc.Status -ne "Running") {

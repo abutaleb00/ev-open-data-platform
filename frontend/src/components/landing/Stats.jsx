@@ -64,8 +64,10 @@ export default function Stats() {
     ];
 
     return (
-        <section id="stats" className="bg-white border-y border-slate-200/60 py-16">
-            <div className="max-w-7xl mx-auto px-6">
+        <section id="stats" className="relative overflow-hidden border-y border-slate-200/60 py-16 bg-gradient-to-br from-amber-50/80 via-white to-emerald-50/60">
+            <div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-[#FFAF00]/10 rounded-full blur-[110px] pointer-events-none" />
+            <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#73CB44]/10 rounded-full blur-[110px] pointer-events-none" />
+            <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
                     <h2 className="text-3xl font-black tracking-tight text-slate-900">Straight From Our Live API</h2>
                     <p className="text-sm text-slate-500 font-medium">

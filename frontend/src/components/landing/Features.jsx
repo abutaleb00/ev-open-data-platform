@@ -4,7 +4,8 @@ import { Database, Terminal, ShieldCheck, ArrowUpRight } from 'lucide-react';
 
 export default function Features() {
     return (
-        <section id="features" className="relative max-w-7xl mx-auto px-6 py-24">
+        <section id="features" className="relative bg-white py-24">
+            <div className="max-w-7xl mx-auto px-6">
             <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-900 bg-gradient-to-r from-[#FFAF00]/10 to-[#73CB44]/10 px-3 py-1.5 rounded-xl border border-slate-200">
                     Built For Every Role
@@ -70,6 +71,7 @@ export default function Features() {
                     </div>
                 </div>
 
+            </div>
             </div>
         </section>
     );

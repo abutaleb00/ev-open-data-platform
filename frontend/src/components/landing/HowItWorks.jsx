@@ -27,7 +27,10 @@ const STEPS = [
 
 export default function HowItWorks() {
     return (
-        <section id="how-it-works" className="relative max-w-7xl mx-auto px-6 py-24">
+        <section id="how-it-works" className="relative overflow-hidden py-24 bg-gradient-to-bl from-emerald-50/70 via-white to-amber-50/60">
+            <div className="absolute top-1/3 right-0 w-[380px] h-[380px] bg-[#73CB44]/10 rounded-full blur-[110px] pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-[380px] h-[380px] bg-[#FFAF00]/10 rounded-full blur-[110px] pointer-events-none" />
+            <div className="max-w-7xl mx-auto px-6 relative z-10">
             <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
                 <span className="text-xs font-black uppercase tracking-widest text-slate-900 bg-gradient-to-r from-[#FFAF00]/10 to-[#73CB44]/10 px-3 py-1.5 rounded-xl border border-slate-200">
                     From Signup to Live Data
@@ -56,6 +59,7 @@ export default function HowItWorks() {
                         <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[220px]">{step.description}</p>
                     </div>
                 ))}
+            </div>
             </div>
         </section>
     );

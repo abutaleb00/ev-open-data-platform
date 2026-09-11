@@ -5,10 +5,12 @@ import dynamic from 'next/dynamic';
 import api from '@/lib/axios';
 import Header from '@/components/landing/Header';
 import Footer from '@/components/landing/Footer';
+import Link from 'next/link';
 import {
-    MapPin, Zap, Layers, Server, Search, Compass,
+    MapPin, Zap, Search, Compass,
     ChevronLeft, ChevronRight, RefreshCw, X, Eye,
-    ExternalLink, Building2, Clock, Filter, ImageIcon
+    ExternalLink, Building2, Clock, Filter, ImageIcon,
+    Radar, PlugZap, ArrowRight, SearchX
 } from 'lucide-react';
 
 // Dynamic import prevents server-side rendering errors with Leaflet
@@ -116,10 +118,42 @@ export default function PublicOpenDataExplorer() {
                         <span>Compiling network view...</span>
                     </div>
                 ) : filteredLocations.length === 0 ? (
-                    <div className="py-24 bg-white border border-slate-200 rounded-3xl text-center max-w-md mx-auto p-6">
-                        <Server size={28} className="mx-auto text-slate-300 mb-2" />
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-wider">No charging nodes found</p>
-                    </div>
+                    search || selectedPowerType || selectedStatus ? (
+                        <div className="py-20 bg-white border border-slate-200 rounded-3xl text-center max-w-lg mx-auto px-8">
+                            <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mb-5">
+                                <SearchX size={24} className="text-slate-400" />
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 tracking-tight">No matches for your filters</h3>
+                            <p className="text-sm text-slate-500 font-medium mt-2 leading-relaxed">
+                                {search ? <>Nothing matches “{search}”</> : 'No locations match the selected filters'} — try broadening your search or clearing the filters below.
+                            </p>
+                            <button
+                                onClick={() => { setSearch(''); setSelectedPowerType(''); setSelectedStatus(''); setPage(1); }}
+                                className="mt-6 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer"
+                            >
+                                Clear Filters
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="relative overflow-hidden py-20 bg-white border border-slate-200 rounded-3xl text-center max-w-lg mx-auto px-8">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[280px] h-[280px] bg-[#FFAF00]/5 rounded-full blur-[80px] pointer-events-none" />
+                            <div className="relative mx-auto h-16 w-16 rounded-2xl bg-slate-950 text-[#FFAF00] flex items-center justify-center mb-6 shadow-md">
+                                <Radar size={28} strokeWidth={2} className="animate-pulse" />
+                            </div>
+                            <h3 className="relative text-xl font-black text-slate-900 tracking-tight">This Network Is Just Getting Started</h3>
+                            <p className="relative text-sm text-slate-500 font-medium mt-2 leading-relaxed max-w-sm mx-auto">
+                                No charging locations have been published to the public feed yet. Once an operator adds and publishes their infrastructure, it will appear here in real time.
+                            </p>
+                            <Link
+                                href="/login"
+                                className="relative mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-[#FFAF00] hover:bg-[#e09e00] text-slate-950 transition-colors shadow-sm"
+                            >
+                                <PlugZap size={14} />
+                                <span>Be the First Operator</span>
+                                <ArrowRight size={14} />
+                            </Link>
+                        </div>
+                    )
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredLocations.map((loc) => {

@@ -13,7 +13,7 @@ const TRUST_BADGES = [
 
 export default function Hero() {
     return (
-        <section id="hero" className="relative overflow-hidden pt-20 pb-24 md:pt-28 md:pb-36 bg-gradient-to-b from-white via-slate-50/30 to-[#F8FAFC]">
+        <section id="hero" className="relative overflow-hidden pt-10 pb-24 md:pt-12 md:pb-18 bg-gradient-to-b from-white via-slate-50/30 to-[#F8FAFC]">
             {/* Ambient Radial Mesh Layer using Brand Identity Colors */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,175,0,0.06),transparent_50%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(115,203,68,0.04),transparent_40%)]" />

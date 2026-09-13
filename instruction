@@ -21,3 +21,13 @@ npx prisma generate
 
 # 3. Restart your PM2 application runner
 pm2 restart all
+
+
+
+$cred = Get-Credential
+# enter "administrator" and the password from backend/.env when prompted
+
+$s = New-PSSession -ComputerName 77.68.112.25 -Credential $cred
+Invoke-Command -Session $s -FilePath "D:\steven\ev-open-data-platform\deploy\iis\redeploy.ps1"
+Remove-PSSession $s
+Get-Credential pops a secure prompt so the password isn't typed in plaintext into the script.

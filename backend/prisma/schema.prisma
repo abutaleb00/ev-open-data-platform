@@ -159,6 +159,9 @@ model Connector {
 
 model Tariff {
   id          Int         @id @default(autoincrement())
+  tariffUid   String?     // Stores the partner's own stable tariff ID, so a re-sync can
+                          // update this record in place instead of recreating it under a
+                          // new internal id (which is what the public feed exposes as "id").
   name        String
   pricePerKwh Float
   currency    String      @default("GBP")
@@ -167,6 +170,7 @@ model Tariff {
   company     Company     @relation(fields: [companyId], references: [id])
   connectors  Connector[]
 
+  @@unique([companyId, tariffUid], name: "companyId_tariffUid")
   @@index([companyId], map: "Tariff_companyId_fkey")
 }
 

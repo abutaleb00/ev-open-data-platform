@@ -295,12 +295,18 @@ exports.syncOperatorData = async (req, res) => {
 //
 // Same authorization contract as syncOperatorData above (regular key -> only its
 // own company via req.partnerCompanyId; master key -> may resolve/auto-provision
-// any operator by operator_reference_id/name). Unlike locations, Tariff has no
-// external UID field to upsert against, so this endpoint treats the payload as
-// the operator's complete tariff list: wipe every existing Tariff owned by the
-// resolved company, then recreate fresh from the payload - "clear older and add
-// new", not a merge. Connectors referencing a wiped Tariff are detached
-// (tariffId set to null) rather than deleted, matching tariffController.deleteTariff.
+// any operator by operator_reference_id/name). Each tariff entry may carry its
+// own stable 'id' (matched against Tariff.tariffUid, same convention as
+// Location.locationUid) - a tariff already known under that id is updated in
+// place, preserving its internal Tariff.id (which is what the public feed at
+// GET /open-data/tariffs exposes as "id"), so anyone referencing that id (a
+// connector's tariff_ids, a downstream consumer's cache) doesn't see it change
+// out from under them on every sync. An id omitted from the payload falls back
+// to a position-based generated id, same as location sync does for locationUid.
+// "Clear older" means: any tariff this company owns that ISN'T present in this
+// payload (by tariffUid) gets removed - connectors pointing at a removed tariff
+// are detached (tariffId set to null) rather than deleted, matching
+// tariffController.deleteTariff.
 exports.syncOperatorTariffs = async (req, res) => {
     try {
         const payload = req.body;
@@ -361,36 +367,58 @@ exports.syncOperatorTariffs = async (req, res) => {
 
         const company = resolution.company;
 
-        const createdTariffs = await prisma.$transaction(async (tx) => {
-            const existingTariffs = await tx.tariff.findMany({
-                where: { companyId: company.id },
+        const syncedTariffs = await prisma.$transaction(async (tx) => {
+            const synced = [];
+            const keptUids = [];
+
+            for (let i = 0; i < tariffsToSync.length; i++) {
+                const t = tariffsToSync[i];
+                const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
+                const tariffUid = (t.id !== undefined && t.id !== null && String(t.id).trim() !== '')
+                    ? String(t.id).trim()
+                    : `tariff_${company.id}_${i}`;
+
+                keptUids.push(tariffUid);
+
+                const tariffData = {
+                    name: t.name,
+                    pricePerKwh: parseFloat(price),
+                    currency: t.currency || 'GBP',
+                    companyId: company.id,
+                    tariffUid
+                };
+
+                const existing = await tx.tariff.findFirst({
+                    where: { companyId: company.id, tariffUid }
+                });
+
+                const tariff = existing
+                    ? await tx.tariff.update({ where: { id: existing.id }, data: tariffData })
+                    : await tx.tariff.create({ data: tariffData });
+
+                synced.push(tariff);
+            }
+
+            // OR'd with tariffUid: null to also sweep up rows created before this field
+            // existed - SQL NULL semantics mean a plain `notIn` never matches a NULL column.
+            const staleTariffs = await tx.tariff.findMany({
+                where: {
+                    companyId: company.id,
+                    OR: [{ tariffUid: null }, { tariffUid: { notIn: keptUids } }]
+                },
                 select: { id: true }
             });
-            const existingTariffIds = existingTariffs.map((t) => t.id);
+            const staleIds = staleTariffs.map((t) => t.id);
 
-            if (existingTariffIds.length > 0) {
+            if (staleIds.length > 0) {
                 await tx.connector.updateMany({
-                    where: { tariffId: { in: existingTariffIds } },
+                    where: { tariffId: { in: staleIds } },
                     data: { tariffId: null }
                 });
-                await tx.tariff.deleteMany({ where: { id: { in: existingTariffIds } } });
+                await tx.tariff.deleteMany({ where: { id: { in: staleIds } } });
             }
 
-            const created = [];
-            for (const t of tariffsToSync) {
-                const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
-                const tariff = await tx.tariff.create({
-                    data: {
-                        name: t.name,
-                        pricePerKwh: parseFloat(price),
-                        currency: t.currency || 'GBP',
-                        companyId: company.id
-                    }
-                });
-                created.push(tariff);
-            }
-
-            return created;
+            return synced;
         });
 
         await prisma.auditLog.create({
@@ -398,7 +426,7 @@ exports.syncOperatorTariffs = async (req, res) => {
                 action: 'SYNC',
                 entity: 'TARIFF',
                 entityId: company.id,
-                details: `Partner sync replaced all tariffs for "${company.name}": ${createdTariffs.length} tariff(s) created.`,
+                details: `Partner sync updated tariffs for "${company.name}": ${syncedTariffs.length} tariff(s) synced.`,
                 ipAddress: clientIp
             }
         });
@@ -412,8 +440,8 @@ exports.syncOperatorTariffs = async (req, res) => {
                 operator_id: company.id,
                 operator_name: company.name,
                 operator_reference_id: company.operatorReferenceId,
-                synced_tariffs_count: createdTariffs.length,
-                synced_tariff_ids: createdTariffs.map((t) => t.id)
+                synced_tariffs_count: syncedTariffs.length,
+                synced_tariffs: syncedTariffs.map((t) => ({ id: t.id, tariff_uid: t.tariffUid, name: t.name }))
             }
         });
 

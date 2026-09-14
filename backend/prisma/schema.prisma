@@ -170,7 +170,7 @@ model Tariff {
   company     Company     @relation(fields: [companyId], references: [id])
   connectors  Connector[]
 
-  @@unique([companyId, tariffUid], name: "companyId_tariffUid")
+  @@index([companyId, tariffUid])
   @@index([companyId], map: "Tariff_companyId_fkey")
 }
 

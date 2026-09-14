@@ -142,15 +142,6 @@ export default function LoginPage() {
                     </form>
                 </div>
 
-                {/* Footer Copy Ribbon Links */}
-                <div className="pt-4 border-t border-slate-100 text-center lg:text-left shrink-0">
-                    <p className="text-xs font-medium text-slate-400">
-                        Deploying a fresh charging network profile?{' '}
-                        <Link href="/register" className="font-bold text-slate-900 hover:underline">
-                            Register Organization
-                        </Link>
-                    </p>
-                </div>
             </div>
 
             {/* RIGHT PANE: DECORATIVE BLUEPRINT GRID SIDEBAR */}

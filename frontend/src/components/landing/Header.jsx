@@ -183,14 +183,11 @@ export default function Header() {
                     ) : (
                         /* UNSECURED PUBLIC AUTH LINK GATES */
                         <div className="hidden sm:flex items-center space-x-2">
-                            <Link href="/login" className="text-xs sm:text-sm font-black text-slate-700 hover:text-[#FFAF00] px-3 py-2 transition-colors cursor-pointer">
-                                Sign In
-                            </Link>
                             <Link
                                 href="/login"
                                 className="bg-[#73CB44] text-white text-xs sm:text-sm font-black px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl hover:bg-[#62b537] transition-all shadow-sm active:scale-98 cursor-pointer whitespace-nowrap"
                             >
-                                Register Network
+                                Sign In
                             </Link>
                         </div>
                     )}
@@ -230,19 +227,12 @@ export default function Header() {
                         {/* Public Auth Redirection Loops inside Mobile Viewport */}
                         {!token && (
                             <div className="pt-4 border-t border-slate-100 flex flex-col space-y-3 sm:hidden">
-                                <Link 
-                                    href="/login" 
-                                    onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED
-                                    className="w-full text-center py-2.5 rounded-xl text-sm font-black text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors"
-                                >
-                                    Sign In
-                                </Link>
                                 <Link
                                     href="/login"
                                     onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED
                                     className="w-full text-center py-2.5 rounded-xl text-sm font-black bg-[#73CB44] text-white hover:bg-[#62b537] transition-colors shadow-sm"
                                 >
-                                    Register Network
+                                    Sign In
                                 </Link>
                             </div>
                         )}

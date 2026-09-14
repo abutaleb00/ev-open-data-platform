@@ -290,3 +290,138 @@ exports.syncOperatorData = async (req, res) => {
         });
     }
 };
+
+// TARIFF SYNC CONTROLLER
+//
+// Same authorization contract as syncOperatorData above (regular key -> only its
+// own company via req.partnerCompanyId; master key -> may resolve/auto-provision
+// any operator by operator_reference_id/name). Unlike locations, Tariff has no
+// external UID field to upsert against, so this endpoint treats the payload as
+// the operator's complete tariff list: wipe every existing Tariff owned by the
+// resolved company, then recreate fresh from the payload - "clear older and add
+// new", not a merge. Connectors referencing a wiped Tariff are detached
+// (tariffId set to null) rather than deleted, matching tariffController.deleteTariff.
+exports.syncOperatorTariffs = async (req, res) => {
+    try {
+        const payload = req.body;
+        const clientIp = getClientIp(req);
+        const isMasterKey = req.isMasterKey === true;
+
+        if (!payload || typeof payload !== 'object') {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error: Request payload cannot be empty."
+            });
+        }
+
+        const tariffsToSync = Array.isArray(payload.tariffs)
+            ? payload.tariffs
+            : (Array.isArray(payload.data) ? payload.data : []);
+
+        if (tariffsToSync.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error: Payload must contain a non-empty 'tariffs' or 'data' array."
+            });
+        }
+
+        for (const t of tariffsToSync) {
+            const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
+            if (!t.name || price === undefined || price === null || price === '' || isNaN(parseFloat(price))) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Validation Error: Every tariff entry requires a 'name' and a numeric 'price_per_kwh' (or 'pricePerKwh')."
+                });
+            }
+        }
+
+        const embeddedOperator = payload.operator || {};
+
+        const resolution = await resolveOperatorCompany({
+            payload,
+            embeddedOperator,
+            isMasterKey,
+            partnerCompanyId: req.partnerCompanyId,
+            clientIp
+        });
+
+        if (resolution.error) {
+            return res.status(resolution.suspended ? 403 : 400).json({
+                success: false,
+                message: resolution.suspended ? `Forbidden: ${resolution.error}` : `Validation Error: ${resolution.error}`
+            });
+        }
+
+        if (!resolution.company) {
+            return res.status(404).json({
+                success: false,
+                message: "The company associated with this API key could not be found."
+            });
+        }
+
+        const company = resolution.company;
+
+        const createdTariffs = await prisma.$transaction(async (tx) => {
+            const existingTariffs = await tx.tariff.findMany({
+                where: { companyId: company.id },
+                select: { id: true }
+            });
+            const existingTariffIds = existingTariffs.map((t) => t.id);
+
+            if (existingTariffIds.length > 0) {
+                await tx.connector.updateMany({
+                    where: { tariffId: { in: existingTariffIds } },
+                    data: { tariffId: null }
+                });
+                await tx.tariff.deleteMany({ where: { id: { in: existingTariffIds } } });
+            }
+
+            const created = [];
+            for (const t of tariffsToSync) {
+                const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
+                const tariff = await tx.tariff.create({
+                    data: {
+                        name: t.name,
+                        pricePerKwh: parseFloat(price),
+                        currency: t.currency || 'GBP',
+                        companyId: company.id
+                    }
+                });
+                created.push(tariff);
+            }
+
+            return created;
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'SYNC',
+                entity: 'TARIFF',
+                entityId: company.id,
+                details: `Partner sync replaced all tariffs for "${company.name}": ${createdTariffs.length} tariff(s) created.`,
+                ipAddress: clientIp
+            }
+        });
+
+        await touchCompany(company.id);
+
+        return res.status(200).json({
+            success: true,
+            message: `Operator "${company.name}" tariffs synced successfully.`,
+            data: {
+                operator_id: company.id,
+                operator_name: company.name,
+                operator_reference_id: company.operatorReferenceId,
+                synced_tariffs_count: createdTariffs.length,
+                synced_tariff_ids: createdTariffs.map((t) => t.id)
+            }
+        });
+
+    } catch (error) {
+        console.error("Tariff sync error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to process tariff sync payload."
+        });
+    }
+};

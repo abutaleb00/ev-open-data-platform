@@ -43,6 +43,12 @@ router.post(
 );
 
 router.post(
+    '/sync-tariffs',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(operatorSyncController.syncOperatorTariffs, 'syncOperatorTariffs')
+);
+
+router.post(
     '/ingest',
     safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
     safeMw(openDataController.ingestExternalData, 'ingestExternalData')

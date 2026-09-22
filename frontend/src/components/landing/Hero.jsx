@@ -3,8 +3,6 @@
 import Link from 'next/link';
 import { ArrowRight, Terminal, Globe, DollarSign, MapPin, ShieldCheck, Zap, RefreshCw } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
-
 const TRUST_BADGES = [
     { icon: ShieldCheck, label: 'OCPI 2.2 Compliant' },
     { icon: Zap, label: 'Multi-Tenant by Design' },
@@ -43,15 +41,15 @@ export default function Hero() {
                             <ArrowRight size={16} />
                         </Link>
 
-                        <a href={`${API_BASE_URL}/open-data/feed`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
+                        <Link href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
                             <MapPin size={16} className="text-slate-400" />
                             <span>Locations Feed</span>
-                        </a>
+                        </Link>
 
-                        <a href={`${API_BASE_URL}/open-data/tariffs`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
+                        <Link href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
                             <DollarSign size={16} className="text-slate-400" />
                             <span>Tariffs Feed</span>
-                        </a>
+                        </Link>
                     </div>
 
                     {/* Trust Badge Row */}
@@ -77,7 +75,7 @@ export default function Hero() {
                     </div>
 
                     <div className="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-[11px] leading-relaxed border border-slate-800 shadow-inner overflow-x-auto max-h-56 scrollbar-thin scrollbar-thumb-slate-800">
-                        <p className="text-slate-500">// GET /api/v1/open-data/feed</p>
+                        <p className="text-slate-500">// GET /api/v1/open-data/public/location/&#123;your-reference-id&#125;</p>
                         <p className="text-slate-400">{"{"}</p>
                         <p className="pl-4"><span className="text-[#FFAF00]">"message"</span>: <span className="text-indigo-300">"ok"</span>,</p>
                         <p className="pl-4"><span className="text-[#FFAF00]">"data"</span>: [</p>

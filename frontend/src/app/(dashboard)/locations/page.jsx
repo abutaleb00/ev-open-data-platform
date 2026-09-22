@@ -7,7 +7,7 @@ import {
     Plus, MapPin, Edit2, Trash2, X, Globe, Eye,
     AlertCircle, CheckCircle2, Clock, Coffee, AlertTriangle,
     Building2, Navigation, Info, Upload, Image as ImageIcon,
-    Zap, ExternalLink, Calendar, Hash, ShieldCheck
+    Zap, ExternalLink, Calendar, Hash, ShieldCheck, Copy, Check
 } from 'lucide-react';
 
 export default function LocationsPage() {
@@ -32,6 +32,7 @@ export default function LocationsPage() {
     const [confirmImageDelete, setConfirmImageDelete] = useState({ show: false, targetId: null });
     const [searchQuery, setSearchString] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [copiedRefId, setCopiedRefId] = useState(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -72,6 +73,16 @@ export default function LocationsPage() {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const handleCopyRefId = async (refId) => {
+        try {
+            await navigator.clipboard.writeText(refId);
+            setCopiedRefId(refId);
+            setTimeout(() => setCopiedRefId((current) => (current === refId ? null : current)), 1500);
+        } catch (error) {
+            console.error("Failed to copy host reference ID", error);
+        }
+    };
 
     const handleFileChange = (e) => {
         setSelectedFiles(Array.from(e.target.files));
@@ -273,7 +284,7 @@ export default function LocationsPage() {
                             <tr>
                                 <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Site & UID</th>
                                 <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Location / City</th>
-                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Operator</th>
+                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Operator / Host ID</th>
                                 <th scope="col" className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">Media</th>
                                 <th scope="col" className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">EVSEs</th>
                                 <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Status</th>
@@ -314,9 +325,28 @@ export default function LocationsPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center text-xs font-extrabold text-slate-800">
-                                                <Building2 size={13} className="mr-2 text-emerald-600 shrink-0" />
-                                                {loc.operator?.name || loc.companyName || '—'}
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center text-xs font-extrabold text-slate-800">
+                                                    <Building2 size={13} className="mr-2 text-emerald-600 shrink-0" />
+                                                    {loc.operator?.name || loc.companyName || '—'}
+                                                </div>
+                                                {loc.operatorReferenceId ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCopyRefId(loc.operatorReferenceId)}
+                                                        title="Copy host reference ID"
+                                                        className="mt-1 inline-flex items-center gap-1.5 w-fit px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 transition-colors cursor-pointer group/copy"
+                                                    >
+                                                        <span className="text-[10px] font-mono font-bold text-slate-500">{loc.operatorReferenceId}</span>
+                                                        {copiedRefId === loc.operatorReferenceId ? (
+                                                            <Check size={10} className="text-emerald-600 shrink-0" />
+                                                        ) : (
+                                                            <Copy size={10} className="text-slate-400 group-hover/copy:text-slate-600 shrink-0" />
+                                                        )}
+                                                    </button>
+                                                ) : (
+                                                    <span className="mt-1 text-[10px] font-semibold text-slate-300 italic">No host ID assigned</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center">

@@ -70,10 +70,22 @@ if ($svc.Status -ne "Running") {
     throw "evopen-backend did not come back up after restart - check backend\logs\service-err.log"
 }
 try {
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:5000/api/v1/open-data/feed" -UseBasicParsing -TimeoutSec 10
+    # /open-data/feed no longer exists (the public feed is now host-scoped only, see
+    # /open-data/public/location/:operatorReferenceId) - hit it with a deliberately
+    # unknown reference ID instead. A 404 here means the service is up and routing
+    # correctly; only a missing response or a 5xx means the deploy is unhealthy.
+    $r = Invoke-WebRequest -Uri "http://127.0.0.1:5000/api/v1/open-data/public/location/__healthcheck__" -UseBasicParsing -TimeoutSec 10
     Write-Host "Backend health check: HTTP $($r.StatusCode)" -ForegroundColor Green
 } catch {
-    throw "Backend health check failed: $($_.Exception.Message)"
+    if ($_.Exception.Response) {
+        $status = [int]$_.Exception.Response.StatusCode
+        if ($status -ge 500) {
+            throw "Backend health check failed: server responded with HTTP $status"
+        }
+        Write-Host "Backend health check: HTTP $status (expected - no host has this reference ID)" -ForegroundColor Green
+    } else {
+        throw "Backend health check failed: $($_.Exception.Message)"
+    }
 }
 
 # --- Frontend ---
@@ -99,4 +111,4 @@ if (-not (Test-Path "out\index.html")) {
 
 Write-Step "Done"
 Write-Host "IIS serves frontend\out directly, so the new build is live immediately." -ForegroundColor Green
-Write-Host "Verify: https://evopen.co.uk and https://api.evopen.co.uk/api/v1/open-data/feed" -ForegroundColor Green
+Write-Host "Verify: https://evopen.co.uk and https://api.evopen.co.uk/api/v1/open-data/public/location/<operatorReferenceId>" -ForegroundColor Green

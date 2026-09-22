@@ -69,7 +69,7 @@ const feedRateLimiter = rateLimit({
                     ipAddress: clientIp || '127.0.0.1',
                     endpoint: req.originalUrl || req.url,
                     method: req.method,
-                    operatorReferenceId: req.query.operator_reference_id ? String(req.query.operator_reference_id) : null,
+                    operatorReferenceId: req.params?.operatorReferenceId ? String(req.params.operatorReferenceId) : (req.query.operator_reference_id ? String(req.query.operator_reference_id) : null),
                     statusCode: 429,
                     userAgent: req.headers['user-agent'] || null
                 }
@@ -107,7 +107,7 @@ const logApiRequest = async (req, res, next) => {
                         ipAddress: ipAddress || '127.0.0.1',
                         endpoint: req.originalUrl || req.url,
                         method: req.method,
-                        operatorReferenceId: req.query.operator_reference_id ? String(req.query.operator_reference_id) : null,
+                        operatorReferenceId: req.params?.operatorReferenceId ? String(req.params.operatorReferenceId) : (req.query.operator_reference_id ? String(req.query.operator_reference_id) : null),
                         statusCode: res.statusCode,
                         userAgent: req.headers['user-agent'] || null
                     }

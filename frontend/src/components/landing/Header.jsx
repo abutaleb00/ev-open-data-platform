@@ -81,7 +81,6 @@ export default function Header() {
         { label: 'Features', href: '/#features' },
         { label: 'How It Works', href: '/#how-it-works' },
         { label: 'OCPI Standard', href: '/#compliance', colorClass: 'hover:text-[#73CB44]' },
-        { label: 'Public Map', href: '/open-data', colorClass: 'hover:text-indigo-600' },
     ];
 
     const isLinkActive = (link) => {

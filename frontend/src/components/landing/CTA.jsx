@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Map } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function CTA() {
     return (
@@ -24,10 +24,6 @@ export default function CTA() {
                             <Link href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-7 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/20 active:scale-98 text-sm">
                                 <span>Create Your Account</span>
                                 <ArrowRight size={16} />
-                            </Link>
-                            <Link href="/open-data" className="flex items-center justify-center space-x-2 bg-white/5 border border-white/10 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-white/10 transition-all text-sm">
-                                <Map size={16} className="text-[#73CB44]" />
-                                <span>Explore the Public Map</span>
                             </Link>
                         </div>
                     </div>

@@ -31,10 +31,28 @@ const parseNumericId = (val) => {
     return isNaN(parsed) ? null : parsed;
 };
 
-// 1. PUBLIC OPEN DATA FEED
-exports.getPublicFeed = async (req, res) => {
+// 1. PUBLIC OPEN DATA FEED - SCOPED TO A SINGLE HOST (OPERATOR)
+// Deliberately requires a host reference ID in the path. There is no
+// "return everything" mode - a request with no (or an unknown) host
+// reference ID gets nothing back, by design, so this can never be used to
+// bulk-scrape every operator's data in one call.
+exports.getPublicLocationsByHost = async (req, res) => {
     try {
-        const { search, companyId, operator_reference_id, page = 1, limit = 50 } = req.query;
+        const { operatorReferenceId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+
+        if (!operatorReferenceId || String(operatorReferenceId).trim() === '') {
+            return res.status(404).json({ name: "NOT_FOUND", message: "Host reference ID is required." });
+        }
+
+        const hostCompany = await prisma.company.findFirst({
+            where: { operatorReferenceId: String(operatorReferenceId).trim() },
+            select: { id: true }
+        });
+
+        if (!hostCompany) {
+            return res.status(404).json({ name: "NOT_FOUND", message: "No host found for the given reference ID." });
+        }
 
         const parsedPage = Math.max(1, parseInt(page, 10) || 1);
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
@@ -44,35 +62,7 @@ exports.getPublicFeed = async (req, res) => {
         // moderator-approved data. Unmoderated previews are served separately via
         // the tenant-scoped, auth-protected getDashboardFeedPreview below.
         const shouldFilterApproved = true;
-        const whereClause = { isApproved: true };
-
-        if (operator_reference_id) {
-            whereClause.OR = [
-                { operatorReferenceId: String(operator_reference_id) },
-                { company: { operatorReferenceId: String(operator_reference_id) } }
-            ];
-        }
-
-        if (companyId && !isNaN(parseInt(companyId, 10))) {
-            whereClause.companyId = parseInt(companyId, 10);
-        }
-
-        if (search && search.trim() !== '') {
-            const searchString = search.trim();
-            const parsedSearchId = parseNumericId(searchString);
-
-            const orConditions = [
-                { name: { contains: searchString } },
-                { postcode: { contains: searchString } },
-                { city: { contains: searchString } }
-            ];
-
-            if (parsedSearchId !== null) {
-                orConditions.push({ id: parsedSearchId });
-            }
-
-            whereClause.AND = [{ OR: orConditions }];
-        }
+        const whereClause = { isApproved: true, companyId: hostCompany.id };
 
         const [locations, totalCount] = await prisma.$transaction([
             prisma.location.findMany({
@@ -212,7 +202,7 @@ exports.getPublicFeed = async (req, res) => {
 
         res.json({
             name: "Location",
-            operator_reference_id: operator_reference_id || null,
+            operator_reference_id: operatorReferenceId,
             message: "Success",
             meta: {
                 total_records: totalCount,
@@ -674,26 +664,34 @@ exports.revokeApiKey = async (req, res) => {
     }
 };
 
-// 6. GET PUBLIC TARIFFS
-exports.getPublicTariffs = async (req, res) => {
+// 6. GET PUBLIC TARIFFS - SCOPED TO A SINGLE HOST (OPERATOR)
+// Same "no host reference ID, no data" rule as getPublicLocationsByHost above -
+// there is intentionally no unscoped/all-operators mode.
+exports.getPublicTariffsByHost = async (req, res) => {
     try {
-        const { search, companyId, page = 1, limit = 50 } = req.query;
+        const { operatorReferenceId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+
+        if (!operatorReferenceId || String(operatorReferenceId).trim() === '') {
+            return res.status(404).json({ name: "NOT_FOUND", message: "Host reference ID is required." });
+        }
+
+        // Public, unauthenticated feed - only ever expose tariffs belonging to
+        // an actively vetted (non-suspended, non-pending) operator company.
+        const hostCompany = await prisma.company.findFirst({
+            where: { operatorReferenceId: String(operatorReferenceId).trim(), status: 'ACTIVE' },
+            select: { id: true }
+        });
+
+        if (!hostCompany) {
+            return res.status(404).json({ name: "NOT_FOUND", message: "No host found for the given reference ID." });
+        }
 
         const parsedPage = Math.max(1, parseInt(page, 10));
         const parsedLimit = Math.max(1, Math.min(100, parseInt(limit, 10)));
         const offset = (parsedPage - 1) * parsedLimit;
 
-        // Public, unauthenticated feed - only ever expose tariffs belonging to
-        // an actively vetted (non-suspended, non-pending) operator company.
-        const whereClause = { company: { status: 'ACTIVE' } };
-
-        if (companyId) {
-            whereClause.companyId = parseInt(companyId, 10);
-        }
-
-        if (search && search.trim() !== '') {
-            whereClause.currency = { contains: search.trim() };
-        }
+        const whereClause = { companyId: hostCompany.id };
 
         const [tariffs, totalCount] = await prisma.$transaction([
             prisma.tariff.findMany({

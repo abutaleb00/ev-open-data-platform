@@ -65,13 +65,6 @@ export default function Footer() {
                                 <FileText size={12} className="mr-1.5 text-[#73CB44]" /> Public Hub
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
-                                {/* --- INTERACTIVE ROUTER VISUAL VIEW INTERFACE LINK CHIPS --- */}
-                                <li>
-                                    <Link href="/open-data" className="hover:text-white text-emerald-400 font-bold transition-colors flex items-center group cursor-pointer">
-                                        <span className="h-1 w-1 bg-[#73CB44] rounded-full mr-2" />
-                                        Public Map Explorer
-                                    </Link>
-                                </li>
                                 <li>
                                     <Link href="/login" className="hover:text-white transition-colors block cursor-pointer">
                                         Operator Dashboard Portal

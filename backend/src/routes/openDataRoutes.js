@@ -18,18 +18,21 @@ const safeMw = (mw, name) => {
 // ------------------------------------------------------
 // 1. PUBLIC UNSECURED DATA OPEN STREAMS (RATE LIMITED)
 // ------------------------------------------------------
+// Scoped to a single host (operator) by reference ID only - there is no
+// unscoped "give me everything" route. A request with no or an unknown
+// host reference ID resolves to 404, never a bulk dump.
 router.get(
-    '/feed',
+    '/public/location/:operatorReferenceId',
     safeMw(feedRateLimiter, 'feedRateLimiter'),
     safeMw(logApiRequest, 'logApiRequest'),
     safeMw(checkLocationsGate, 'checkLocationsGate'),
-    safeMw(openDataController.getPublicFeed, 'getPublicFeed')
+    safeMw(openDataController.getPublicLocationsByHost, 'getPublicLocationsByHost')
 );
 
 router.get(
-    '/tariffs',
+    '/public/tariff/:operatorReferenceId',
     safeMw(checkTariffsGate, 'checkTariffsGate'),
-    safeMw(openDataController.getPublicTariffs, 'getPublicTariffs')
+    safeMw(openDataController.getPublicTariffsByHost, 'getPublicTariffsByHost')
 );
 
 

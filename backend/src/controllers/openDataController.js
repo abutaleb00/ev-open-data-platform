@@ -703,23 +703,47 @@ exports.getPublicTariffsByHost = async (req, res) => {
             prisma.tariff.count({ where: whereClause })
         ]);
 
-        const ocpiTariffs = tariffs.map(t => ({
-            id: t.id.toString(),
-            currency: t.currency || "GBP",
-            tariff_alt_text: [],
-            elements: [
-                {
-                    price_components: [
-                        {
-                            type: "ENERGY",
-                            price: parseFloat(t.pricePerKwh),
-                            step_size: 1
-                        }
-                    ]
-                }
-            ],
-            last_updated: t.createdAt || new Date().toISOString()
-        }));
+        // A tariff synced from a full OCPI Tariff object has that whole payload
+        // preserved in ocpiTariffData (elements, restrictions, country_code,
+        // party_id, type, min/max_price, tariff_alt_*, ...) - return it verbatim,
+        // just overriding id/currency/last_updated from the DB's own bookkeeping.
+        // Anything without a stored full object (admin-portal-created, or synced
+        // from the flat { name, price_per_kwh } shape) falls back to a minimal
+        // synthesized shape. Either way, "id" must be tariffUid, not the internal
+        // Tariff.id - it's the same value a Location feed's connector.tariff_ids
+        // references, and consumers need the two to line up.
+        const ocpiTariffs = tariffs.map(t => {
+            const rawOcpi = safeJsonParse(t.ocpiTariffData);
+            const id = t.tariffUid || `tariff_${t.id}`;
+            const lastUpdated = t.createdAt ? t.createdAt.toISOString() : new Date().toISOString();
+
+            if (rawOcpi && typeof rawOcpi === 'object') {
+                return {
+                    ...rawOcpi,
+                    id,
+                    currency: t.currency || rawOcpi.currency || "GBP",
+                    last_updated: rawOcpi.last_updated || lastUpdated
+                };
+            }
+
+            return {
+                id,
+                currency: t.currency || "GBP",
+                tariff_alt_text: [],
+                elements: [
+                    {
+                        price_components: [
+                            {
+                                type: "ENERGY",
+                                price: parseFloat(t.pricePerKwh),
+                                step_size: 1
+                            }
+                        ]
+                    }
+                ],
+                last_updated: lastUpdated
+            };
+        });
 
         res.json({
             name: "OK",

@@ -364,10 +364,10 @@ exports.syncOperatorTariffs = async (req, res) => {
             });
         }
 
-        const tariffsToSync = (Array.isArray(payload.tariffs)
+        const rawTariffEntries = Array.isArray(payload.tariffs)
             ? payload.tariffs
-            : (Array.isArray(payload.data) ? payload.data : [])
-        ).map(normalizeTariffEntry);
+            : (Array.isArray(payload.data) ? payload.data : []);
+        const tariffsToSync = rawTariffEntries.map(normalizeTariffEntry);
 
         if (tariffsToSync.length === 0) {
             return res.status(400).json({
@@ -418,6 +418,7 @@ exports.syncOperatorTariffs = async (req, res) => {
 
             for (let i = 0; i < tariffsToSync.length; i++) {
                 const t = tariffsToSync[i];
+                const raw = rawTariffEntries[i];
                 const tariffUid = (t.id !== undefined && t.id !== null && String(t.id).trim() !== '')
                     ? String(t.id).trim()
                     : `tariff_${company.id}_${i}`;
@@ -429,7 +430,11 @@ exports.syncOperatorTariffs = async (req, res) => {
                     pricePerKwh: parseFloat(t.price_per_kwh),
                     currency: t.currency || 'GBP',
                     companyId: company.id,
-                    tariffUid
+                    tariffUid,
+                    // Only a full OCPI Tariff object (has an 'elements' array) carries
+                    // the extra fields worth preserving losslessly - a flat
+                    // { name, price_per_kwh } entry has nothing more to store.
+                    ocpiTariffData: Array.isArray(raw?.elements) ? JSON.stringify(raw) : null
                 };
 
                 const existing = await tx.tariff.findFirst({

@@ -158,17 +158,26 @@ model Connector {
 }
 
 model Tariff {
-  id          Int         @id @default(autoincrement())
-  tariffUid   String?     // Stores the partner's own stable tariff ID, so a re-sync can
-                          // update this record in place instead of recreating it under a
-                          // new internal id (which is what the public feed exposes as "id").
-  name        String
-  pricePerKwh Float
-  currency    String      @default("GBP")
+  id            Int         @id @default(autoincrement())
+  tariffUid     String?     // Stores the partner's own stable tariff ID (their GUID) -
+                            // a re-sync matches on this to update the record in place.
+                            // This, not the internal Int id, is what the public feed
+                            // exposes as "id" - it's the same value a Connector's
+                            // tariffIdsJson references, so the two feeds line up.
+  name          String
+  pricePerKwh   Float
+  currency      String      @default("GBP")
+  // Raw pass-through of the full incoming OCPI Tariff object (elements,
+  // restrictions, country_code, party_id, type, min/max_price, tariff_alt_*, ...)
+  // when sync-tariffs was given one, same pattern as Location.operatorData etc.
+  // Null for tariffs created via the admin portal or synced from the flat
+  // { name, price_per_kwh } shape - the public feed falls back to a minimal
+  // synthesized shape in that case.
+  ocpiTariffData String?  @db.Text
 
-  companyId   Int
-  company     Company     @relation(fields: [companyId], references: [id])
-  connectors  Connector[]
+  companyId     Int
+  company       Company     @relation(fields: [companyId], references: [id])
+  connectors    Connector[]
 
   @@index([companyId, tariffUid])
   @@index([companyId], map: "Tariff_companyId_fkey")

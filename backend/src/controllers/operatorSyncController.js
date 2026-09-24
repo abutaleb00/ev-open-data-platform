@@ -291,6 +291,50 @@ exports.syncOperatorData = async (req, res) => {
     }
 };
 
+// Pulls the per-kWh energy price out of a full OCPI Tariff object's
+// elements[].price_components[] (type === 'ENERGY'), scanning every element
+// since restriction-scoped tariffs (peak/off-peak, day-of-week, ...) can vary
+// which element carries the ENERGY component. Returns null if none is found.
+const extractOcpiEnergyPrice = (t) => {
+    if (!Array.isArray(t.elements)) return null;
+    for (const element of t.elements) {
+        const components = Array.isArray(element?.price_components) ? element.price_components : [];
+        const energyComponent = components.find((c) => c && c.type === 'ENERGY');
+        if (energyComponent && energyComponent.price !== undefined && energyComponent.price !== null) {
+            return energyComponent.price;
+        }
+    }
+    return null;
+};
+
+// A full OCPI Tariff object has no flat 'name' field - derive one so the rest
+// of the sync logic (which is written against the platform's flat tariff
+// shape) doesn't need to know the difference. Prefers tariff_alt_text (OCPI's
+// own human-readable display text) if present, otherwise falls back to the
+// tariff's type plus the first restriction's day_of_week, if any.
+const deriveOcpiTariffName = (t) => {
+    if (Array.isArray(t.tariff_alt_text)) {
+        const withText = t.tariff_alt_text.find((alt) => alt && alt.text);
+        if (withText) return withText.text;
+    }
+    const dayOfWeek = t.elements?.[0]?.restrictions?.day_of_week;
+    const label = t.type || 'REGULAR';
+    return dayOfWeek ? `${label} - ${dayOfWeek}` : `${label} Tariff`;
+};
+
+// Normalizes either the platform's flat tariff shape ({ id, name, price_per_kwh,
+// currency }) or a full OCPI Tariff object ({ id, currency, type, elements: [...],
+// tariff_alt_text, ... }) into the flat shape, so nothing downstream needs to
+// branch on which one was sent.
+const normalizeTariffEntry = (t) => ({
+    id: t.id,
+    name: t.name || deriveOcpiTariffName(t),
+    price_per_kwh: t.price_per_kwh !== undefined
+        ? t.price_per_kwh
+        : (t.pricePerKwh !== undefined ? t.pricePerKwh : extractOcpiEnergyPrice(t)),
+    currency: t.currency
+});
+
 // TARIFF SYNC CONTROLLER
 //
 // Same authorization contract as syncOperatorData above (regular key -> only its
@@ -320,9 +364,10 @@ exports.syncOperatorTariffs = async (req, res) => {
             });
         }
 
-        const tariffsToSync = Array.isArray(payload.tariffs)
+        const tariffsToSync = (Array.isArray(payload.tariffs)
             ? payload.tariffs
-            : (Array.isArray(payload.data) ? payload.data : []);
+            : (Array.isArray(payload.data) ? payload.data : [])
+        ).map(normalizeTariffEntry);
 
         if (tariffsToSync.length === 0) {
             return res.status(400).json({
@@ -332,11 +377,11 @@ exports.syncOperatorTariffs = async (req, res) => {
         }
 
         for (const t of tariffsToSync) {
-            const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
+            const price = t.price_per_kwh;
             if (!t.name || price === undefined || price === null || price === '' || isNaN(parseFloat(price))) {
                 return res.status(400).json({
                     success: false,
-                    message: "Validation Error: Every tariff entry requires a 'name' and a numeric 'price_per_kwh' (or 'pricePerKwh')."
+                    message: "Validation Error: Every tariff entry requires a 'name' and a numeric 'price_per_kwh' (or 'pricePerKwh') - or, for a full OCPI Tariff object, an 'elements' array with an ENERGY price_component."
                 });
             }
         }
@@ -373,7 +418,6 @@ exports.syncOperatorTariffs = async (req, res) => {
 
             for (let i = 0; i < tariffsToSync.length; i++) {
                 const t = tariffsToSync[i];
-                const price = t.price_per_kwh !== undefined ? t.price_per_kwh : t.pricePerKwh;
                 const tariffUid = (t.id !== undefined && t.id !== null && String(t.id).trim() !== '')
                     ? String(t.id).trim()
                     : `tariff_${company.id}_${i}`;
@@ -382,7 +426,7 @@ exports.syncOperatorTariffs = async (req, res) => {
 
                 const tariffData = {
                     name: t.name,
-                    pricePerKwh: parseFloat(price),
+                    pricePerKwh: parseFloat(t.price_per_kwh),
                     currency: t.currency || 'GBP',
                     companyId: company.id,
                     tariffUid

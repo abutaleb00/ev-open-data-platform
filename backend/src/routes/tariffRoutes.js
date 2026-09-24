@@ -24,6 +24,12 @@ router.get(
     safeMw(tariffController.getAllTariffs, 'getAllTariffs')
 );
 
+router.get(
+    '/:id',
+    safeMw(restrictTo && restrictTo('SUPER_ADMIN', 'COMPANY_ADMIN', 'STAFF'), 'restrictTo'),
+    safeMw(tariffController.getTariffById, 'getTariffById')
+);
+
 // 3. MUTATION PRIVILEGES: Restricted strictly to Super Admins and Company Admins
 router.post(
     '/',

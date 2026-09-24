@@ -3,6 +3,7 @@ const prisma = new PrismaClient();
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 const { touchCompany } = require('../utils/touchCompany');
+const { extractEnergyPrice } = require('../utils/ocpiTariff');
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
@@ -291,22 +292,6 @@ exports.syncOperatorData = async (req, res) => {
     }
 };
 
-// Pulls the per-kWh energy price out of a full OCPI Tariff object's
-// elements[].price_components[] (type === 'ENERGY'), scanning every element
-// since restriction-scoped tariffs (peak/off-peak, day-of-week, ...) can vary
-// which element carries the ENERGY component. Returns null if none is found.
-const extractOcpiEnergyPrice = (t) => {
-    if (!Array.isArray(t.elements)) return null;
-    for (const element of t.elements) {
-        const components = Array.isArray(element?.price_components) ? element.price_components : [];
-        const energyComponent = components.find((c) => c && c.type === 'ENERGY');
-        if (energyComponent && energyComponent.price !== undefined && energyComponent.price !== null) {
-            return energyComponent.price;
-        }
-    }
-    return null;
-};
-
 // A full OCPI Tariff object has no flat 'name' field - derive one so the rest
 // of the sync logic (which is written against the platform's flat tariff
 // shape) doesn't need to know the difference. Prefers tariff_alt_text (OCPI's
@@ -331,7 +316,7 @@ const normalizeTariffEntry = (t) => ({
     name: t.name || deriveOcpiTariffName(t),
     price_per_kwh: t.price_per_kwh !== undefined
         ? t.price_per_kwh
-        : (t.pricePerKwh !== undefined ? t.pricePerKwh : extractOcpiEnergyPrice(t)),
+        : (t.pricePerKwh !== undefined ? t.pricePerKwh : extractEnergyPrice(t)),
     currency: t.currency
 });
 

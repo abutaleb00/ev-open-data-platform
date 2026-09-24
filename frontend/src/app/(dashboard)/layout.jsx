@@ -418,7 +418,7 @@ export default function DashboardLayout({ children }) {
                 </header>
 
                 <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 scrollbar-thin scrollbar-thumb-slate-200">
-                    <div className="max-w-7xl mx-auto">
+                    <div className={pathname.replace(/\/$/, '').endsWith('/tariffs') ? 'w-full' : 'max-w-7xl mx-auto'}>
                         {children}
                     </div>
                 </main>

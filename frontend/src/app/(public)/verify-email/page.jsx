@@ -70,7 +70,7 @@ function VerifyEmailContent() {
             </div>
 
             {status !== 'verifying' && (
-                <Link
+                <Link prefetch={false}
                     href="/login"
                     className="w-full flex cursor-pointer justify-center items-center py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-slate-900 hover:bg-slate-800 transition-colors shadow-sm"
                 >

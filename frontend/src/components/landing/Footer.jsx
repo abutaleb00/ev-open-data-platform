@@ -43,13 +43,13 @@ export default function Footer() {
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
                                 <li>
-                                    <Link href="/open-data/docs" className="hover:text-white transition-colors flex items-center group cursor-pointer">
+                                    <Link prefetch={false} href="/open-data/docs" className="hover:text-white transition-colors flex items-center group cursor-pointer">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#FFAF00] transition-colors" />
                                         Locations JSON Feed
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/open-data/docs" className="hover:text-white transition-colors flex items-center group cursor-pointer">
+                                    <Link prefetch={false} href="/open-data/docs" className="hover:text-white transition-colors flex items-center group cursor-pointer">
                                         <span className="h-1 w-1 bg-slate-700 rounded-full mr-2 group-hover:bg-[#73CB44] transition-colors" />
                                         Tariffs JSON Feed
                                     </Link>
@@ -64,12 +64,12 @@ export default function Footer() {
                             </h4>
                             <ul className="text-xs font-semibold text-slate-400 space-y-3">
                                 <li>
-                                    <Link href="/login" className="hover:text-white transition-colors block cursor-pointer">
+                                    <Link prefetch={false} href="/login" className="hover:text-white transition-colors block cursor-pointer">
                                         Operator Dashboard Portal
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/login" className="hover:text-white transition-colors block cursor-pointer">
+                                    <Link prefetch={false} href="/login" className="hover:text-white transition-colors block cursor-pointer">
                                         Client Key Provisioner
                                     </Link>
                                 </li>

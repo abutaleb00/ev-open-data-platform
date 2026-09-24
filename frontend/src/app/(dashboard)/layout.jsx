@@ -259,7 +259,7 @@ export default function DashboardLayout({ children }) {
                     {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                 </button>
 
-                <Link
+                <Link prefetch={false}
                     href={dashboardHref}
                     className="h-20 flex items-center border-b border-slate-800/60 shrink-0 px-6 justify-between hover:bg-slate-800/20 transition-colors cursor-pointer group"
                 >
@@ -308,7 +308,7 @@ export default function DashboardLayout({ children }) {
                                                         const isSubActive = isPathActive(sub.href);
 
                                                         return (
-                                                            <Link
+                                                            <Link prefetch={false}
                                                                 key={sub.label}
                                                                 href={sub.href}
                                                                 className={`block py-2 px-3 rounded-lg text-xs transition-all ${isSubActive
@@ -327,7 +327,7 @@ export default function DashboardLayout({ children }) {
                                             </div>
                                         </>
                                     ) : (
-                                        <Link
+                                        <Link prefetch={false}
                                             href={item.href}
                                             className={`flex items-center rounded-xl px-3 py-2.5 transition-all ${isActiveLink
                                                     ? 'bg-[#FFAF00] text-white font-black shadow-md'
@@ -405,7 +405,7 @@ export default function DashboardLayout({ children }) {
                                         <p className="text-xs font-black text-slate-900 truncate">{user?.name || 'Network Operator'}</p>
                                         <p className="text-[11px] font-semibold text-slate-400 truncate mt-0.5">{user?.email}</p>
                                     </div>
-                                    <Link href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors">
+                                    <Link prefetch={false} href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors">
                                         <Settings size={14} className="text-slate-400" />
                                         <span>Personal Security Configs</span>
                                     </Link>

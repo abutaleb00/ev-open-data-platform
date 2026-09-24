@@ -97,7 +97,7 @@ export default function OpenDataDocsPage() {
                         <a href="mailto:ops@evopen.co.uk" className="inline-flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition-colors">
                             <Mail size={14} /> ops@evopen.co.uk
                         </a>
-                        <Link href="/login" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-[#FFAF00] hover:bg-[#e09e00] text-slate-950 transition-colors">
+                        <Link prefetch={false} href="/login" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-[#FFAF00] hover:bg-[#e09e00] text-slate-950 transition-colors">
                             <span>Dashboard Login</span>
                             <ArrowRight size={14} />
                         </Link>

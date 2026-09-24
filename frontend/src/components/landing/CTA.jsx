@@ -21,7 +21,7 @@ export default function CTA() {
                             Create an operator account, add your first location, and see it flow through to a live, standards-compliant API — usually within minutes.
                         </p>
                         <div className="pt-4 flex flex-col sm:flex-row justify-center gap-4">
-                            <Link href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-7 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/20 active:scale-98 text-sm">
+                            <Link prefetch={false} href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-7 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/20 active:scale-98 text-sm">
                                 <span>Create Your Account</span>
                                 <ArrowRight size={16} />
                             </Link>

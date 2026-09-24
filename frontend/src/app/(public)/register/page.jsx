@@ -83,7 +83,7 @@ export default function CorporateRegisterPage() {
                             <span>Self-Registration Loop Gate</span>
                         </div>
                         <p className="text-[11px] text-slate-500 font-medium pt-2">
-                            Already configured? <Link href="/login" className="text-[#FFAF00] hover:underline font-bold inline-flex items-center">Sign in <ChevronRight size={12} /></Link>
+                            Already configured? <Link prefetch={false} href="/login" className="text-[#FFAF00] hover:underline font-bold inline-flex items-center">Sign in <ChevronRight size={12} /></Link>
                         </p>
                     </div>
                 </div>

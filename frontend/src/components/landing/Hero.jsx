@@ -36,17 +36,17 @@ export default function Hero() {
 
                     {/* Integrated Navigation Loops */}
                     <div className="pt-4 flex flex-col sm:flex-row flex-wrap justify-center lg:justify-start gap-4">
-                        <Link href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-6 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/10 active:scale-98 text-sm">
+                        <Link prefetch={false} href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-6 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/10 active:scale-98 text-sm">
                             <span>Get Started</span>
                             <ArrowRight size={16} />
                         </Link>
 
-                        <Link href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
+                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
                             <MapPin size={16} className="text-slate-400" />
                             <span>Locations Feed</span>
                         </Link>
 
-                        <Link href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
+                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
                             <DollarSign size={16} className="text-slate-400" />
                             <span>Tariffs Feed</span>
                         </Link>

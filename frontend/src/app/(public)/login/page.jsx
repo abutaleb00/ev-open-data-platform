@@ -52,7 +52,7 @@ export default function LoginPage() {
                 
                 {/* Header Back Button - FIXED PATH REDIRECTION */}
                 <div className="flex items-center justify-between w-full shrink-0">
-                    <Link href="/" className="inline-flex cursor-pointer items-center space-x-2 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors py-1 group">
+                    <Link prefetch={false} href="/" className="inline-flex cursor-pointer items-center space-x-2 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors py-1 group">
                         <ChevronLeft size={14} strokeWidth={2.5} className="transform transition-transform group-hover:-translate-x-0.5" />
                         <span>Return Home</span>
                     </Link>
@@ -98,7 +98,7 @@ export default function LoginPage() {
                         <div>
                             <div className="flex justify-between items-center mb-1.5">
                                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Account Access Key</label>
-                                <Link href="/forgot-password" className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors">
+                                <Link prefetch={false} href="/forgot-password" className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors">
                                     Forgot?
                                 </Link>
                             </div>
@@ -155,7 +155,7 @@ export default function LoginPage() {
                 <div className="absolute bottom-0 left-0 w-[450px] h-[450px] bg-amber-500/5 rounded-full blur-[120px] pointer-events-none" />
 
                 {/* Brand Header Link */}
-                <Link href="/" className="flex items-center space-x-3 relative z-10 cursor-pointer w-max">
+                <Link prefetch={false} href="/" className="flex items-center space-x-3 relative z-10 cursor-pointer w-max">
                     <div className="p-2.5 bg-gradient-to-br from-amber-400 to-amber-500 rounded-xl text-slate-950 shadow-md">
                         <Zap size={18} strokeWidth={2.5} />
                     </div>

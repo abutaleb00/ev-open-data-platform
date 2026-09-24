@@ -96,7 +96,7 @@ export default function Header() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
 
                 {/* Brand Identity Vector Block */}
-                <Link href="/" className="flex items-center space-x-3 cursor-pointer group z-50">
+                <Link prefetch={false} href="/" className="flex items-center space-x-3 cursor-pointer group z-50">
                     <div className="p-2 bg-[#FFAF00] rounded-xl text-slate-950 shadow-md shadow-[#FFAF00]/10 transition-transform group-hover:scale-105">
                         <Zap size={22} fill="currentColor" className="text-slate-950" />
                     </div>
@@ -111,7 +111,7 @@ export default function Header() {
                         const isActive = isLinkActive(link);
 
                         return (
-                            <Link
+                            <Link prefetch={false}
                                 key={link.label}
                                 href={link.href}
                                 className={`px-3 py-2 rounded-lg transition-colors ${isActive
@@ -157,12 +157,12 @@ export default function Header() {
                                         <p className="text-[10px] font-semibold text-slate-400 truncate mt-0.5">{user?.email}</p>
                                     </div>
 
-                                    <Link href={dashboardHref} onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors cursor-pointer">
+                                    <Link prefetch={false} href={dashboardHref} onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors cursor-pointer">
                                         <LayoutDashboard size={14} className="text-slate-400" />
                                         <span>Go to Workspace</span>
                                     </Link>
 
-                                    <Link href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors cursor-pointer">
+                                    <Link prefetch={false} href="/settings" onClick={() => setIsProfileOpen(false)} className="w-full text-left px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 flex items-center space-x-2.5 transition-colors cursor-pointer">
                                         <Settings size={14} className="text-slate-400" />
                                         <span>Account Settings</span>
                                     </Link>
@@ -182,7 +182,7 @@ export default function Header() {
                     ) : (
                         /* UNSECURED PUBLIC AUTH LINK GATES */
                         <div className="hidden sm:flex items-center space-x-2">
-                            <Link
+                            <Link prefetch={false}
                                 href="/login"
                                 className="bg-[#73CB44] text-white text-xs sm:text-sm font-black px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl hover:bg-[#62b537] transition-all shadow-sm active:scale-98 cursor-pointer whitespace-nowrap"
                             >
@@ -209,7 +209,7 @@ export default function Header() {
                             const isActive = isLinkActive(link);
 
                             return (
-                                <Link
+                                <Link prefetch={false}
                                     key={link.label}
                                     href={link.href}
                                     onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED: Force hides menu upon clicking anchor scroll targets
@@ -226,7 +226,7 @@ export default function Header() {
                         {/* Public Auth Redirection Loops inside Mobile Viewport */}
                         {!token && (
                             <div className="pt-4 border-t border-slate-100 flex flex-col space-y-3 sm:hidden">
-                                <Link
+                                <Link prefetch={false}
                                     href="/login"
                                     onClick={() => setIsMobileMenuOpen(false)} // <-- FIXED
                                     className="w-full text-center py-2.5 rounded-xl text-sm font-black bg-[#73CB44] text-white hover:bg-[#62b537] transition-colors shadow-sm"

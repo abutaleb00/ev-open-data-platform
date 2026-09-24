@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Users, Search, RefreshCw, Mail,
-    ShieldAlert, ShieldCheck, Shield, Building2, UserX, Loader2
+    ShieldAlert, ShieldCheck, Shield, Building2, UserX
 } from 'lucide-react';
 
 export default function SuperAdminUsersPage() {
@@ -96,7 +97,7 @@ export default function SuperAdminUsersPage() {
                         onClick={fetchUsers}
                         className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all cursor-pointer"
                     >
-                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                        {loading ? <BrandLoader size="xs" /> : <RefreshCw size={16} />}
                     </button>
                 </div>
             </div>
@@ -119,8 +120,7 @@ export default function SuperAdminUsersPage() {
                                 <tr>
                                     <td colSpan="5" className="p-16 text-center text-xs font-bold text-slate-400">
                                         <div className="flex flex-col items-center justify-center space-y-3">
-                                            <RefreshCw size={24} className="animate-spin text-indigo-600" />
-                                            <span className="animate-pulse">Synchronising global access parameters...</span>
+                                            <BrandLoader label="Synchronising global access parameters" />
                                         </div>
                                     </td>
                                 </tr>
@@ -190,7 +190,7 @@ export default function SuperAdminUsersPage() {
                                             >
                                                 {togglingId === u.id ? (
                                                     <span className="flex items-center space-x-1">
-                                                        <Loader2 size={12} className="animate-spin" />
+                                                        <BrandLoader size="xs" />
                                                         <span>Syncing...</span>
                                                     </span>
                                                 ) : u.role === 'SUPER_ADMIN' ? (

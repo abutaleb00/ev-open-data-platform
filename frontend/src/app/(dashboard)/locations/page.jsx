@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, MapPin, Edit2, Trash2, X, Globe, Eye,
     AlertCircle, CheckCircle2, Clock, Coffee, AlertTriangle,
@@ -294,9 +295,8 @@ export default function LocationsPage() {
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-16 text-center text-slate-400">
-                                        <MapPin size={24} className="animate-spin mx-auto mb-3 text-emerald-500" />
-                                        <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading sites schema...</p>
+                                    <td colSpan="7" className="px-6 py-16 text-center">
+                                        <BrandLoader label="Loading sites schema" />
                                     </td>
                                 </tr>
                             ) : locations.length === 0 ? (

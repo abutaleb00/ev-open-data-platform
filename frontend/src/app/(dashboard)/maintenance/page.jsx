@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
-    ShieldAlert, RefreshCw, Layers, Zap, Gauge, Clock,
+    ShieldAlert, Layers, Zap, Gauge, Clock,
     CheckCircle2, Radio, MessageSquare, AlertTriangle, Save, ToggleLeft, ToggleRight
 } from 'lucide-react';
 
@@ -135,8 +136,7 @@ export default function MaintenanceAlertPage() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
-                <RefreshCw size={32} className="animate-spin text-[#FFAF00] mb-3" />
-                <p className="text-sm font-semibold">Reading matrix gate parameters...</p>
+                <BrandLoader label="Reading matrix gate parameters" />
             </div>
         );
     }

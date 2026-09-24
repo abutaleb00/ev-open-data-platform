@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     MapPin, Zap, Activity, DollarSign,
     Layers, RefreshCw, AlertTriangle, ShieldCheck,
@@ -46,8 +47,7 @@ export default function IntegratedDashboardPage() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400 space-y-4 px-4 select-none">
-                <RefreshCw size={36} className="animate-spin text-indigo-600" />
-                <p className="text-xs font-bold tracking-widest text-center uppercase animate-pulse">Syncing corporate telemetry stream...</p>
+                <BrandLoader label="Syncing corporate telemetry stream" />
             </div>
         );
     }

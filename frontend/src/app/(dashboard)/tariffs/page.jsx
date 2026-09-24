@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Edit2, Trash2, X, AlertCircle, Eye,
-    CheckCircle2, DollarSign, Layers, Building2,
-    ChevronDown, ChevronUp, Zap, Globe, Link as LinkIcon, Plug
+    DollarSign, Layers, Building2,
+    ChevronDown, ChevronUp, Zap, Globe, Link as LinkIcon, Plug,
+    Copy, Check, Clock, Percent, MapPin
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -81,6 +83,7 @@ export default function TariffsPage() {
     const [viewDetail, setViewDetail] = useState(null);
     const [viewLoading, setViewLoading] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [copiedUid, setCopiedUid] = useState(false);
 
     const [formData, setFormData] = useState(emptyForm());
     const [submitting, setSubmitting] = useState(false);
@@ -254,9 +257,8 @@ export default function TariffsPage() {
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-16 text-center text-slate-400">
-                                        <DollarSign size={24} className="animate-spin mx-auto mb-3 text-blue-500" />
-                                        <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading commercial rates...</p>
+                                    <td colSpan="7" className="px-6 py-16 text-center">
+                                        <BrandLoader label="Loading commercial rates" />
                                     </td>
                                 </tr>
                             ) : tariffs.length === 0 ? (
@@ -322,7 +324,7 @@ export default function TariffsPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end space-x-1 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex items-center justify-end space-x-1">
                                                 <button onClick={() => openModal('view', t)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View Tariff Details">
                                                     <Eye size={14} strokeWidth={2.5} />
                                                 </button>
@@ -563,8 +565,8 @@ export default function TariffsPage() {
                                 <button type="button" onClick={closeModal} className="flex-1 py-2 text-xs font-bold uppercase tracking-wider border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={submitting} className="flex-1 py-2 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-slate-800 transition-all shadow-sm cursor-pointer">
-                                    {submitting ? 'Processing...' : 'Save Plan'}
+                                <button type="submit" disabled={submitting} className="flex-1 py-2 bg-slate-900 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-slate-800 transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2">
+                                    {submitting ? (<><BrandLoader size="xs" /> Processing...</>) : 'Save Plan'}
                                 </button>
                             </div>
                         </form>
@@ -597,8 +599,8 @@ export default function TariffsPage() {
                             </div>
                             <div className="flex space-x-3 pt-4 border-t border-slate-100">
                                 <button onClick={closeModal} className="flex-1 py-2 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">Cancel</button>
-                                <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer">
-                                    {submitting ? 'Purging...' : 'Confirm Decommission'}
+                                <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2">
+                                    {submitting ? (<><BrandLoader size="xs" /> Purging...</>) : 'Confirm Decommission'}
                                 </button>
                             </div>
                         </div>
@@ -609,97 +611,174 @@ export default function TariffsPage() {
             {/* View Details Modal */}
             {modalMode === 'view' && selectedTariff && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-                    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity" onClick={closeModal}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all border border-slate-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10">
-                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Tariff Detail — {selectedTariff.name}</h3>
-                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer">
-                                <X size={16} strokeWidth={2.5} />
-                            </button>
-                        </div>
+                    <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm transition-opacity" onClick={closeModal}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto transform transition-all border border-slate-100 animate-in zoom-in-95 duration-200">
 
                         {viewLoading || !viewDetail ? (
-                            <div className="p-16 text-center text-slate-400">
-                                <DollarSign size={24} className="animate-spin mx-auto mb-3 text-blue-500" />
-                                <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading tariff detail...</p>
+                            <div className="p-20">
+                                <BrandLoader label="Loading tariff detail" />
                             </div>
                         ) : (
-                            <div className="p-6 space-y-6">
-                                <div className="grid grid-cols-2 gap-4 text-xs">
-                                    <DetailField label="Internal ID" value={`#${viewDetail.id}`} mono />
-                                    <DetailField label="Tariff UID (OCPI id)" value={viewDetail.tariffUid || '—'} mono />
-                                    <DetailField label="Operator" value={viewDetail.companyName} />
-                                    <DetailField label="Operator Reference ID" value={viewDetail.operatorReferenceId || '—'} mono />
-                                    <DetailField label="Unit Rate" value={`${Number(viewDetail.pricePerKwh).toFixed(4)} ${viewDetail.currency}/kWh`} />
-                                    <DetailField label="Type" value={viewDetail.type || '—'} />
-                                    <DetailField label="Country / Party" value={`${viewDetail.countryCode || '—'} / ${viewDetail.partyId || '—'}`} />
-                                    <DetailField label="Min / Max Price" value={`${viewDetail.minPrice ?? '—'} / ${viewDetail.maxPrice ?? '—'}`} />
+                            <>
+                                {/* Hero header */}
+                                <div className="relative overflow-hidden rounded-t-3xl bg-gradient-to-br from-[#0F172A] via-slate-900 to-slate-800 px-7 pt-6 pb-12">
+                                    <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-gradient-to-br from-[#FFAF00] to-[#73CB44] opacity-20 blur-2xl pointer-events-none" />
+                                    <div className="absolute -bottom-16 -left-10 w-40 h-40 rounded-full bg-gradient-to-br from-[#73CB44] to-[#FFAF00] opacity-10 blur-2xl pointer-events-none" />
+                                    <svg className="absolute inset-0 w-full h-full opacity-[0.07] pointer-events-none" aria-hidden="true">
+                                        <pattern id="tariffDotGrid" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
+                                            <circle cx="1.5" cy="1.5" r="1.5" fill="white" />
+                                        </pattern>
+                                        <rect width="100%" height="100%" fill="url(#tariffDotGrid)" />
+                                    </svg>
+
+                                    {/* Top row: badges on the left, close button on the right - normal flow so
+                                        nothing can ever render underneath it, regardless of content width. */}
+                                    <div className="relative flex items-start justify-between gap-3 mb-4">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/10 text-[#FFAF00] border border-white/10">
+                                                {viewDetail.type || 'FLAT RATE'}
+                                            </span>
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                                                <Building2 size={11} /> {viewDetail.companyName}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={closeModal}
+                                            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-slate-300 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
+                                        >
+                                            <X size={15} strokeWidth={2.5} />
+                                        </button>
+                                    </div>
+
+                                    <div className="relative">
+                                        <h3 className="text-2xl font-black text-white tracking-tight pr-4">{viewDetail.name}</h3>
+                                        <button
+                                            onClick={() => {
+                                                if (viewDetail.tariffUid) {
+                                                    navigator.clipboard?.writeText(viewDetail.tariffUid);
+                                                    setCopiedUid(true);
+                                                    setTimeout(() => setCopiedUid(false), 1500);
+                                                }
+                                            }}
+                                            className="mt-1.5 flex items-center gap-1.5 text-[11px] font-mono font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Copy tariff UID"
+                                        >
+                                            {copiedUid ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                                            #{viewDetail.id} · {viewDetail.tariffUid || 'no OCPI uid'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Price card - floats over the header/body seam for a layered, modern feel */}
+                                <div className="relative px-7 -mt-8">
+                                    <div className="flex items-center justify-between gap-4 bg-white rounded-2xl shadow-lg border border-slate-100 px-5 py-4">
+                                        <div>
+                                            <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-0.5">Unit Rate</div>
+                                            <div className="flex items-baseline gap-1.5">
+                                                <span className="text-2xl font-black text-slate-900">{Number(viewDetail.pricePerKwh).toFixed(2)}</span>
+                                                <span className="text-xs font-black text-slate-400">{viewDetail.currency} / kWh</span>
+                                            </div>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FFAF00] to-[#73CB44] flex items-center justify-center shadow-md shrink-0">
+                                            <Zap size={20} className="text-white" fill="white" strokeWidth={1.5} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-7 pt-5 space-y-7">
+                                    {/* Stat tiles */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <StatTile icon={Globe} color="blue" label="Country / Party" value={`${viewDetail.countryCode || '—'} / ${viewDetail.partyId || '—'}`} />
+                                        <StatTile icon={DollarSign} color="emerald" label="Price Range" value={`${viewDetail.minPrice ?? '—'} – ${viewDetail.maxPrice ?? '—'}`} />
+                                        <StatTile icon={Zap} color="amber" label="Pricing Rules" value={viewDetail.elements?.length || 0} />
+                                        <StatTile icon={Plug} color="indigo" label="Linked Plugs" value={viewDetail.connectors?.length || 0} />
+                                    </div>
+
                                     {viewDetail.tariffAltUrl && (
-                                        <div className="col-span-2">
-                                            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Alt URL</div>
-                                            <a href={viewDetail.tariffAltUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 font-semibold break-all">
-                                                <LinkIcon size={11} /> {viewDetail.tariffAltUrl}
-                                            </a>
-                                        </div>
+                                        <a
+                                            href={viewDetail.tariffAltUrl} target="_blank" rel="noopener noreferrer"
+                                            className="flex items-center gap-2 w-max max-w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-xs font-bold hover:bg-blue-100 transition-colors"
+                                        >
+                                            <LinkIcon size={12} className="shrink-0" /> <span className="truncate">{viewDetail.tariffAltUrl}</span>
+                                        </a>
                                     )}
-                                </div>
 
-                                <div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                                        <Zap size={12} className="text-amber-500" /> Pricing Elements & Restrictions
-                                    </h4>
-                                    {viewDetail.elements?.length ? (
-                                        <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                                            <table className="min-w-full text-[11px]">
-                                                <thead className="bg-slate-50">
-                                                    <tr>
-                                                        <th className="px-3 py-2 text-left font-black text-slate-500 uppercase">Day</th>
-                                                        <th className="px-3 py-2 text-left font-black text-slate-500 uppercase">Time</th>
-                                                        <th className="px-3 py-2 text-left font-black text-slate-500 uppercase">Price</th>
-                                                        <th className="px-3 py-2 text-left font-black text-slate-500 uppercase">VAT</th>
-                                                        <th className="px-3 py-2 text-left font-black text-slate-500 uppercase">Step</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {viewDetail.elements.map((el, i) => {
-                                                        const pc = el.price_components?.find(c => c.type === 'ENERGY') || el.price_components?.[0] || {};
-                                                        const r = el.restrictions || {};
-                                                        return (
-                                                            <tr key={i}>
-                                                                <td className="px-3 py-2 font-bold text-slate-700">{r.day_of_week || 'Any'}</td>
-                                                                <td className="px-3 py-2 font-mono text-slate-600">{r.start_time || '—'}–{r.end_time || '—'}</td>
-                                                                <td className="px-3 py-2 font-mono font-bold text-slate-900">{pc.price ?? '—'}</td>
-                                                                <td className="px-3 py-2 font-mono text-slate-600">{pc.vat ?? '—'}</td>
-                                                                <td className="px-3 py-2 font-mono text-slate-600">{pc.step_size ?? '—'}</td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
+                                    {/* Pricing elements as rule cards */}
+                                    <div className="pt-6 border-t border-slate-100">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-6 h-6 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
+                                                <Zap size={12} className="text-amber-500" />
+                                            </div>
+                                            <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-500">Pricing Elements & Restrictions</h4>
                                         </div>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 font-semibold">No structured pricing elements stored for this tariff.</p>
-                                    )}
-                                </div>
+                                        {viewDetail.elements?.length ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {viewDetail.elements.map((el, i) => {
+                                                    const pc = el.price_components?.find(c => c.type === 'ENERGY') || el.price_components?.[0] || {};
+                                                    const r = el.restrictions || {};
+                                                    const dayStyle = DAY_COLORS[r.day_of_week] || 'bg-slate-100 text-slate-600 border-slate-200';
+                                                    return (
+                                                        <div key={i} className="relative bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${dayStyle}`}>
+                                                                    {r.day_of_week || 'Any day'}
+                                                                </span>
+                                                                <span className="text-lg font-black text-slate-900">
+                                                                    {pc.price ?? '—'} <span className="text-[10px] font-bold text-slate-400">{viewDetail.currency}</span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500">
+                                                                <span className="flex items-center gap-1">
+                                                                    <Clock size={11} className="text-slate-400" /> {r.start_time || '00:00'}–{r.end_time || '23:59'}
+                                                                </span>
+                                                                {pc.vat !== undefined && pc.vat !== null && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <Percent size={11} className="text-slate-400" /> {pc.vat}% VAT
+                                                                    </span>
+                                                                )}
+                                                                {pc.step_size !== undefined && pc.step_size !== null && (
+                                                                    <span className="text-slate-400">step {pc.step_size}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 font-semibold">No structured pricing elements stored for this tariff.</p>
+                                        )}
+                                    </div>
 
-                                <div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                                        <Plug size={12} className="text-blue-500" /> Linked Connectors ({viewDetail.connectors?.length || 0})
-                                    </h4>
-                                    {viewDetail.connectors?.length ? (
-                                        <div className="space-y-1.5">
-                                            {viewDetail.connectors.map(c => (
-                                                <div key={c.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[11px]">
-                                                    <span className="font-bold text-slate-700">{c.hardwareId || `Connector #${c.id}`} <span className="text-slate-400 font-medium">({c.standard})</span></span>
-                                                    <span className="text-slate-500 font-semibold">{c.locationName || '—'}</span>
-                                                </div>
-                                            ))}
+                                    {/* Linked connectors */}
+                                    <div className="pt-6 border-t border-slate-100">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+                                                <Plug size={12} className="text-blue-500" />
+                                            </div>
+                                            <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-500">Linked Connectors ({viewDetail.connectors?.length || 0})</h4>
                                         </div>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 font-semibold">No connectors currently reference this tariff.</p>
-                                    )}
+                                        {viewDetail.connectors?.length ? (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {viewDetail.connectors.map(c => (
+                                                    <div key={c.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 hover:border-blue-200 hover:bg-blue-50/40 transition-colors">
+                                                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                                                            <Plug size={13} className="text-blue-500" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[11px] font-bold text-slate-700 truncate">{c.hardwareId || `Connector #${c.id}`} <span className="text-slate-400 font-medium">({c.standard})</span></div>
+                                                            <div className="text-[10px] text-slate-400 font-semibold flex items-center gap-1 truncate">
+                                                                <MapPin size={9} /> {c.locationName || '—'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 font-semibold">No connectors currently reference this tariff.</p>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            </>
                         )}
                     </div>
                 </div>
@@ -708,11 +787,31 @@ export default function TariffsPage() {
     );
 }
 
-function DetailField({ label, value, mono }) {
+const DAY_COLORS = {
+    MONDAY: 'bg-rose-50 text-rose-700 border-rose-200',
+    TUESDAY: 'bg-orange-50 text-orange-700 border-orange-200',
+    WEDNESDAY: 'bg-amber-50 text-amber-700 border-amber-200',
+    THURSDAY: 'bg-lime-50 text-lime-700 border-lime-200',
+    FRIDAY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    SATURDAY: 'bg-sky-50 text-sky-700 border-sky-200',
+    SUNDAY: 'bg-violet-50 text-violet-700 border-violet-200'
+};
+
+const STAT_COLORS = {
+    blue: 'bg-blue-50 text-blue-600 border-blue-200',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-600 border-amber-200',
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200'
+};
+
+function StatTile({ icon: Icon, color, label, value }) {
     return (
-        <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">{label}</div>
-            <div className={`font-bold text-slate-800 ${mono ? 'font-mono' : ''}`}>{value}</div>
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center border mb-2 ${STAT_COLORS[color]}`}>
+                <Icon size={13} strokeWidth={2.5} />
+            </div>
+            <div className="text-xs font-black text-slate-900 truncate">{value}</div>
+            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{label}</div>
         </div>
     );
 }

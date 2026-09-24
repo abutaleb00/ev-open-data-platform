@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Building2, User, Mail, Lock, Phone, Palette, Eye, EyeOff,
-    ShieldCheck, AlertCircle, ArrowRight, RefreshCw, CheckCircle2, ChevronRight
+    ShieldCheck, AlertCircle, ArrowRight, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -237,7 +238,7 @@ export default function CorporateRegisterPage() {
                                 >
                                     {submitting ? (
                                         <>
-                                            <RefreshCw size={12} className="animate-spin text-white" />
+                                            <BrandLoader size="xs" tone="light" />
                                             <span>Building Tenancy...</span>
                                         </>
                                     ) : (

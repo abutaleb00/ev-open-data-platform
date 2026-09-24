@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     ArrowLeft, Globe, Save, ShieldAlert, CheckCircle2,
     MapPin, Building2, HelpCircle, ToggleLeft, ToggleRight, Lock, Zap, Layers, Image as ImageIcon, EyeOff, Plus, Trash2
@@ -257,9 +258,8 @@ function EnrichFormContent() {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 font-bold text-xs uppercase tracking-wider">
-                <Globe className="animate-spin text-indigo-600 mb-3" size={28} />
-                <span>Compiling Location Metadata Matrix...</span>
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <BrandLoader label="Compiling Location Metadata Matrix" />
             </div>
         );
     }
@@ -555,9 +555,8 @@ function EnrichFormContent() {
 export default function EnrichLocationPage() {
     return (
         <Suspense fallback={
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 font-bold text-xs uppercase tracking-wider">
-                <Globe className="animate-spin text-indigo-600 mb-3" size={28} />
-                <span>Initializing Form Workspace...</span>
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <BrandLoader label="Initializing Form Workspace" />
             </div>
         }>
             <EnrichFormContent />

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Zap, Edit2, Trash2, X, Info,
     AlertCircle, CheckCircle2, XCircle, Clock,
@@ -211,9 +212,8 @@ export default function ConnectorsPage() {
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-16 text-center text-slate-400">
-                                        <Zap size={24} className="animate-spin mx-auto mb-3 text-amber-500" />
-                                        <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading hardware connectors...</p>
+                                    <td colSpan="6" className="px-6 py-16 text-center">
+                                        <BrandLoader label="Loading hardware connectors" />
                                     </td>
                                 </tr>
                             ) : connectors.length === 0 ? (

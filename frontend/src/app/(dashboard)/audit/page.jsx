@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     ShieldAlert, Clock, User, Database,
     RefreshCw, Search, Activity, Globe,
@@ -109,7 +110,7 @@ export default function AuditLogsPage() {
                     disabled={loading}
                     className="flex items-center space-x-2 bg-slate-900 border border-slate-800 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 transition-all shadow-sm font-bold text-xs uppercase tracking-wider active:scale-98 disabled:opacity-50 cursor-pointer w-full md:w-auto justify-center"
                 >
-                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                    {loading ? <BrandLoader size="xs" /> : <RefreshCw size={14} />}
                     <span>Refresh Stream</span>
                 </button>
             </div>

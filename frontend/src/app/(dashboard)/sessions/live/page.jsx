@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Activity, Zap, MapPin, Clock, BatteryCharging,
     RefreshCw, Layers, DollarSign
@@ -76,7 +77,7 @@ export default function LiveSessionsPage() {
                     disabled={loading}
                     className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all shadow-sm font-bold active:scale-95 disabled:opacity-50"
                 >
-                    <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                    {loading ? <BrandLoader size="xs" /> : <RefreshCw size={18} />}
                     <span>Sync Telemetry</span>
                 </button>
             </div>
@@ -84,8 +85,7 @@ export default function LiveSessionsPage() {
             {/* Live Sessions Grid */}
             {loading && sessions.length === 0 ? (
                 <div className="bg-white rounded-2xl p-16 text-center border border-slate-200/60">
-                    <RefreshCw size={32} className="animate-spin mx-auto text-blue-500 mb-3" />
-                    <p className="text-slate-500 font-medium text-sm">Pinging network hardware...</p>
+                    <BrandLoader label="Pinging network hardware" />
                 </div>
             ) : sessions.length === 0 ? (
                 <div className="bg-white rounded-2xl p-16 text-center border border-slate-200/60 flex flex-col items-center">

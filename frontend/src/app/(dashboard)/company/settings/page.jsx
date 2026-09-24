@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
-    Building2, Mail, Save, RefreshCw,
+    Building2, Mail, Save,
     CheckCircle2, AlertCircle, ShieldCheck
 } from 'lucide-react';
 
@@ -70,8 +71,7 @@ export default function CompanySettingsPage() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center p-24 text-slate-400 space-y-4">
-                <RefreshCw size={36} className="animate-spin text-indigo-600" />
-                <p className="text-sm font-bold tracking-wide animate-pulse">Syncing corporate workspace parameters...</p>
+                <BrandLoader label="Syncing corporate workspace parameters" />
             </div>
         );
     }
@@ -156,7 +156,7 @@ export default function CompanySettingsPage() {
                         >
                             {submitting ? (
                                 <>
-                                    <RefreshCw size={12} className="animate-spin text-white" />
+                                    <BrandLoader size="xs" />
                                     <span>Syncing Schema Alignment...</span>
                                 </>
                             ) : (

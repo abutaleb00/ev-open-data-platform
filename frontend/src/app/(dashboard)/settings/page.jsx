@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import Cookies from 'js-cookie';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Settings as SettingsIcon, User, Shield, Save,
     Building2, Mail, CheckCircle2, Lock, Eye, EyeOff,
-    Phone, MapPin, Camera, RefreshCw, AlertCircle
+    Phone, MapPin, Camera, AlertCircle
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -120,8 +121,7 @@ export default function SettingsPage() {
     if (fetchingData) {
         return (
             <div className="flex flex-col items-center justify-center p-24 text-slate-400 space-y-4">
-                <RefreshCw size={36} className="animate-spin text-indigo-600" />
-                <p className="text-sm font-bold tracking-wide animate-pulse">Fetching verified account attributes...</p>
+                <BrandLoader label="Fetching verified account attributes" />
             </div>
         );
     }
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                                     >
                                         {savingProfile ? (
                                             <>
-                                                <RefreshCw size={12} className="animate-spin" />
+                                                <BrandLoader size="xs" />
                                                 <span>Saving Metadata...</span>
                                             </>
                                         ) : (
@@ -419,7 +419,7 @@ export default function SettingsPage() {
                                     >
                                         {changingPassword ? (
                                             <>
-                                                <RefreshCw size={12} className="animate-spin" />
+                                                <BrandLoader size="xs" />
                                                 <span>Rotating Hash...</span>
                                             </>
                                         ) : (

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Zap, MapPin, Edit2, Trash2, Layers,
     X, AlertCircle, CheckCircle2, Clock, Server,
@@ -209,9 +210,8 @@ export default function ChargePointsPage() {
                         <tbody className="bg-white divide-y divide-slate-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-16 text-center text-slate-400">
-                                        <Zap size={24} className="animate-spin mx-auto mb-3 text-indigo-500" />
-                                        <p className="text-xs font-bold uppercase tracking-wider animate-pulse">Loading hardware registry...</p>
+                                    <td colSpan="7" className="px-6 py-16 text-center">
+                                        <BrandLoader label="Loading hardware registry" />
                                     </td>
                                 </tr>
                             ) : chargePoints.length === 0 ? (

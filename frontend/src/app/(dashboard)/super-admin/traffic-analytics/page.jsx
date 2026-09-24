@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     BarChart3, Globe, ShieldAlert, CheckCircle2,
     Clock, RefreshCw, Zap, Filter, Activity,
@@ -109,7 +110,7 @@ export default function TrafficAnalyticsPage() {
                         onClick={fetchAnalytics} disabled={loading}
                         className="flex cursor-pointer items-center justify-center space-x-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 font-black text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
                     >
-                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                        {loading ? <BrandLoader size="xs" /> : <RefreshCw size={14} />}
                         <span>Re-calculate</span>
                     </button>
                 </div>

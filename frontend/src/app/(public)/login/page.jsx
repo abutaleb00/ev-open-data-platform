@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
-import { Zap, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, ShieldAlert, ChevronLeft } from 'lucide-react';
+import { Zap, Mail, Lock, ArrowRight, Eye, EyeOff, ShieldAlert, ChevronLeft } from 'lucide-react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -128,7 +129,7 @@ export default function LoginPage() {
                             >
                                 {loading ? (
                                     <>
-                                        <Loader2 size={14} className="animate-spin mr-2 text-white" />
+                                        <BrandLoader size="xs" className="mr-2" />
                                         <span>Verifying Identity Handshake...</span>
                                     </>
                                 ) : (

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Building2, Search, Edit2, Trash2, Eye,
     X, Mail, Calendar, AlertCircle, Hash, Users,
-    ShieldCheck, ShieldAlert, RefreshCw, Loader2, Copy, Check, Globe, Image as ImageIcon
+    ShieldCheck, ShieldAlert, Copy, Check, Globe, Image as ImageIcon
 } from 'lucide-react';
 
 export default function CompaniesPage() {
@@ -195,8 +196,7 @@ export default function CompaniesPage() {
                                 <tr>
                                     <td colSpan="7" className="px-6 py-16 text-center">
                                         <div className="flex flex-col items-center justify-center space-y-3 text-slate-400">
-                                            <RefreshCw size={24} className="animate-spin text-indigo-600" />
-                                            <p className="text-xs font-bold tracking-wide animate-pulse">Loading operators schema...</p>
+                                            <BrandLoader label="Loading operators schema" />
                                         </div>
                                     </td>
                                 </tr>
@@ -509,7 +509,7 @@ export default function CompaniesPage() {
                                             }`}
                                     >
                                         {submitting ? (
-                                            <Loader2 size={13} className="animate-spin" />
+                                            <BrandLoader size="xs" />
                                         ) : selectedCompany.status === 'SUSPENDED' || selectedCompany.status === 'PENDING' ? (
                                             <> <ShieldCheck size={13} /> <span>Approve & Activate</span> </>
                                         ) : (

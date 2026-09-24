@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/axios';
-import { Loader2, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import BrandLoader from '@/components/BrandLoader';
+import { CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 // --- 1. CORE LOGIC COMPONENT ---
@@ -42,12 +43,7 @@ function VerifyEmailContent() {
     return (
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full text-center space-y-6">
             <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center relative">
-                {status === 'verifying' && (
-                    <>
-                        <div className="absolute inset-0 bg-indigo-50 rounded-full animate-pulse" />
-                        <Loader2 size={28} className="text-indigo-600 animate-spin relative z-10" />
-                    </>
-                )}
+                {status === 'verifying' && <BrandLoader size="md" />}
                 {status === 'success' && (
                     <>
                         <div className="absolute inset-0 bg-emerald-50 rounded-full" />
@@ -94,8 +90,7 @@ export default function VerifyEmailPage() {
             <Suspense
                 fallback={
                     <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl max-w-sm w-full text-center space-y-4">
-                        <Loader2 size={24} className="animate-spin text-slate-400 mx-auto" />
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Initializing Security Boundaries...</p>
+                        <BrandLoader label="Initializing Security Boundaries" />
                     </div>
                 }
             >

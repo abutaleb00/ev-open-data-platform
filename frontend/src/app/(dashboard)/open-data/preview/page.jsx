@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Globe, Server, ShieldCheck, MapPin, DollarSign,
     Layers, Terminal, CheckCircle2, AlertCircle, RefreshCw, Filter
@@ -102,7 +103,7 @@ export default function DatasetPreviewPage() {
                         onClick={fetchPublicFeeds} disabled={loading}
                         className="flex cursor-pointer items-center justify-center space-x-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 font-black text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50"
                     >
-                        <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                        {loading ? <BrandLoader size="xs" /> : <RefreshCw size={14} />}
                         <span>Sync Feeds</span>
                     </button>
                 </div>
@@ -174,9 +175,8 @@ export default function DatasetPreviewPage() {
                 </div>
 
                 {loading ? (
-                    <div className="p-16 text-center text-slate-400 font-bold text-xs uppercase tracking-wider animate-pulse flex flex-col items-center justify-center space-y-3">
-                        <RefreshCw size={20} className="animate-spin text-indigo-600" />
-                        <span>Compiling real-time isolated payload manifests...</span>
+                    <div className="p-16 flex flex-col items-center justify-center">
+                        <BrandLoader label="Compiling real-time isolated payload manifests" />
                     </div>
                 ) : (
                     <div className="p-6">

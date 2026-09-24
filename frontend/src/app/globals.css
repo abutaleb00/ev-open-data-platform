@@ -31,3 +31,16 @@ body {
   90% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { left: 100%; opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
 }
+
+@keyframes brand-loader-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Gentler than Tailwind's default animate-ping (which scales to 2x and can
+   visually bleed into whatever sits right below the loader mark) - caps the
+   ripple at 1.4x so it stays contained within the mark's own footprint. */
+@keyframes brand-loader-ping {
+  0% { transform: scale(1); opacity: 0.35; }
+  75%, 100% { transform: scale(1.4); opacity: 0; }
+}

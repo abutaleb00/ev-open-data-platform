@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import BrandLoader from '@/components/BrandLoader';
 import {
     Key, Copy, CheckCircle2, Plus, RefreshCw, Eye, EyeOff,
-    Globe, ShieldAlert, Building2, Loader2, ClipboardCheck, ShieldCheck
+    Globe, ShieldAlert, Building2, ClipboardCheck, ShieldCheck
 } from 'lucide-react';
 
 export default function ApiKeysPage() {
@@ -125,9 +126,8 @@ export default function ApiKeysPage() {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400 font-bold text-xs uppercase tracking-wider">
-                <Loader2 className="animate-spin text-indigo-600 mb-3" size={28} />
-                <span>Syncing Secure Credentials Pool...</span>
+            <div className="flex flex-col items-center justify-center min-h-[50vh]">
+                <BrandLoader label="Syncing Secure Credentials Pool" />
             </div>
         );
     }

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
 import Cookies from 'js-cookie';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     LogOut, LayoutDashboard, Building2, Zap,
     ChevronLeft, ChevronRight, Settings,
@@ -26,6 +27,20 @@ export default function DashboardLayout({ children }) {
 
     const profileRef = useRef(null);
     const dashboardHref = user?.role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/company/dashboard';
+
+    // Normalizes trailing slashes on both sides before comparing, since the static
+    // export (trailingSlash: true) can produce pathnames like "/locations/". Declared
+    // this early (before the effects/early-return below) because the menu-highlight
+    // effect closes over it on every mount, including the first render where isMounted
+    // is still false - if it were declared after that early return, this render's
+    // closure would capture an uninitialized binding and throw a TDZ error the moment
+    // the effect actually calls it.
+    const isPathActive = (href) => {
+        const normalize = (p) => (p.length > 1 ? p.replace(/\/$/, '') : p);
+        const cleanHref = normalize(href);
+        const cleanPathname = normalize(pathname);
+        return cleanPathname === cleanHref || cleanPathname.startsWith(cleanHref + '/');
+    };
 
     // ----------------------------------------------------------------------
     // 1. NAVIGATION DECLARATION DECK
@@ -193,21 +208,12 @@ export default function DashboardLayout({ children }) {
     };
 
     if (!isMounted || !token) {
-        return <div className="min-h-screen flex items-center justify-center bg-[#0F172A] text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Initializing Security Layers...</div>;
+        return <BrandLoader fullscreen size="lg" label="Initializing Security Layers" sublabel="Verifying your session and tenant scope..." />;
     }
 
     const handleLogout = () => {
         logout();
         router.push('/login');
-    };
-
-    // Normalizes trailing slashes on both sides before comparing, since the static
-    // export (trailingSlash: true) can produce pathnames like "/locations/".
-    const isPathActive = (href) => {
-        const normalize = (p) => (p.length > 1 ? p.replace(/\/$/, '') : p);
-        const cleanHref = normalize(href);
-        const cleanPathname = normalize(pathname);
-        return cleanPathname === cleanHref || cleanPathname.startsWith(cleanHref + '/');
     };
 
     const handleSubmenuToggle = (label) => {

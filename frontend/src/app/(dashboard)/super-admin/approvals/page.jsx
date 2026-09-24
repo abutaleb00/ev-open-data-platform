@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import BrandLoader from '@/components/BrandLoader';
 import {
     ShieldAlert, CheckCircle2, XCircle, MapPin,
     Zap, Building2, Calendar, RefreshCw, X, MessageSquare
@@ -88,7 +89,7 @@ export default function ApprovalsPage() {
                     </div>
                 </div>
                 <button onClick={fetchQueue} className="p-2.5 text-slate-500 hover:text-slate-900 bg-slate-50 rounded-xl border border-slate-200 hover:shadow-sm transition-all">
-                    <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                    {loading ? <BrandLoader size="xs" /> : <RefreshCw size={18} />}
                 </button>
             </div>
 
@@ -113,8 +114,7 @@ export default function ApprovalsPage() {
             {/* Main Content Node */}
             {loading ? (
                 <div className="bg-white rounded-2xl p-16 text-center border border-slate-200/60">
-                    <RefreshCw size={32} className="animate-spin mx-auto text-indigo-500 mb-3" />
-                    <p className="text-slate-500 font-medium text-sm">Processing verification queues...</p>
+                    <BrandLoader label="Processing verification queues" />
                 </div>
             ) : activeTab === 'locations' ? (
                 /* LOCATIONS LISTING */

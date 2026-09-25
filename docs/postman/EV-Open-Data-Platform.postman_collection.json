@@ -890,6 +890,20 @@
           "response": []
         },
         {
+          "name": "Sync Operator Login (requires master key for cross-operator sync)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operator_reference_id\": \"{{operatorReferenceId}}\",\n  \"username\": \"testuser\",\n  \"password\": \"testpassword\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/open-data/sync-operator-login", "host": ["{{baseUrl}}"], "path": ["open-data", "sync-operator-login"] },
+            "description": "Provisions (or rotates credentials for) the portal login this operator uses to sign in at /login and manage their own Location/ChargePoint/Connector/Tariff inventory - same as any self-registered COMPANY_ADMIN, but skips self-registration + email verification since a valid API key is already the trust signal.\n\nSame authorization contract as Sync Operator above:\n- Regular key: only ever creates/updates a login under the key's OWN company; `operator_reference_id` is ignored.\n- Master key: resolves (or auto-provisions, status: ACTIVE) the operator company matching `operator_reference_id`, then creates/updates a login under it.\n\n`username` is stored as the account's login identifier (the same column self-registered users' email lives in) - it does not need to be email-shaped. Calling this again with the same `username` for the same operator rotates that account's password. Calling it with a `username` already owned by a DIFFERENT operator returns 409 Conflict rather than reassigning it."
+          },
+          "response": []
+        },
+        {
           "name": "Ingest External Data (bulk, by numeric ID)",
           "request": {
             "method": "POST",

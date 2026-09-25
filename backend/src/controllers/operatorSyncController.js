@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const bcrypt = require('bcryptjs');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 const { touchCompany } = require('../utils/touchCompany');
@@ -484,6 +485,129 @@ exports.syncOperatorTariffs = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Failed to process tariff sync payload."
+        });
+    }
+};
+
+// OPERATOR LOGIN SYNC CONTROLLER
+//
+// Lets an upstream system provision (or rotate credentials for) the portal login
+// an operator uses to sign in and manage their own Location/ChargePoint/Connector
+// inventory directly - skipping self-registration + email verification entirely,
+// since a valid API key is already the platform's trust signal for partner data
+// (same reasoning documented on syncOperatorData/syncOperatorTariffs above).
+//
+// Same authorization contract as those two, via resolveOperatorCompany: a regular
+// key may only ever create/update the login for its OWN company - 'operator_reference_id'
+// in the payload is ignored, exactly like sync-operator/sync-tariffs. A master/
+// aggregator key may resolve or auto-provision the target company by
+// operator_reference_id and create/update a login under it.
+//
+// The incoming 'username' is stored directly in User.email - the column that
+// already backs every login lookup in authController.login - rather than adding a
+// parallel column, since nothing in the schema or login flow actually requires
+// that value to be email-shaped (the login form's input accepts either). A
+// username collision against a DIFFERENT company's existing account is refused
+// (409) rather than silently reassigning that login; a resync against the SAME
+// company's existing account just rotates its password hash in place.
+exports.syncOperatorLogin = async (req, res) => {
+    try {
+        const payload = req.body || {};
+        const { username, password, operator_reference_id } = payload;
+        const clientIp = getClientIp(req);
+        const isMasterKey = req.isMasterKey === true;
+
+        if (!username || typeof username !== 'string' || !username.trim() ||
+            !password || typeof password !== 'string' || !password.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error: 'username' and 'password' are required."
+            });
+        }
+
+        const resolution = await resolveOperatorCompany({
+            payload: { operator_reference_id },
+            embeddedOperator: {},
+            isMasterKey,
+            partnerCompanyId: req.partnerCompanyId,
+            clientIp
+        });
+
+        if (resolution.error) {
+            return res.status(resolution.suspended ? 403 : 400).json({
+                success: false,
+                message: resolution.suspended ? `Forbidden: ${resolution.error}` : `Validation Error: ${resolution.error}`
+            });
+        }
+
+        if (!resolution.company) {
+            return res.status(404).json({
+                success: false,
+                message: "The company associated with this API key could not be found."
+            });
+        }
+
+        const company = resolution.company;
+        const loginIdentifier = username.trim();
+
+        const existingUser = await prisma.user.findUnique({ where: { email: loginIdentifier } });
+
+        if (existingUser && existingUser.companyId !== company.id) {
+            return res.status(409).json({
+                success: false,
+                message: "Conflict: this username is already registered to a different operator account."
+            });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const user = existingUser
+            ? await prisma.user.update({
+                where: { id: existingUser.id },
+                data: { password: hashedPassword, status: 'ACTIVE', isActivated: true }
+            })
+            : await prisma.user.create({
+                data: {
+                    email: loginIdentifier,
+                    password: hashedPassword,
+                    role: 'COMPANY_ADMIN',
+                    companyId: company.id,
+                    isActivated: true,
+                    status: 'ACTIVE'
+                }
+            });
+
+        await prisma.auditLog.create({
+            data: {
+                action: existingUser ? 'UPDATE' : 'CREATE',
+                entity: 'USER',
+                entityId: user.id,
+                details: `Partner sync ${existingUser ? 'rotated credentials for' : 'provisioned'} operator login "${loginIdentifier}" for "${company.name}" (Ref: ${company.operatorReferenceId || 'n/a'}).`,
+                ipAddress: clientIp
+            }
+        });
+
+        await touchCompany(company.id);
+
+        return res.status(200).json({
+            success: true,
+            message: `Operator login for "${company.name}" synced successfully.`,
+            data: {
+                operator_id: company.id,
+                operator_name: company.name,
+                operator_reference_id: company.operatorReferenceId,
+                username: loginIdentifier,
+                user_id: user.id,
+                created: !existingUser
+            }
+        });
+
+    } catch (error) {
+        console.error("Operator login sync error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to process operator login sync payload."
         });
     }
 };

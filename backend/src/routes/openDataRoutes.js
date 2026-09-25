@@ -52,6 +52,12 @@ router.post(
 );
 
 router.post(
+    '/sync-operator-login',
+    safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
+    safeMw(operatorSyncController.syncOperatorLogin, 'syncOperatorLogin')
+);
+
+router.post(
     '/ingest',
     safeMw(verifyPartnerApiKey, 'verifyPartnerApiKey'),
     safeMw(openDataController.ingestExternalData, 'ingestExternalData')

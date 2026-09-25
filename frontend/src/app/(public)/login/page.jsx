@@ -80,16 +80,16 @@ export default function LoginPage() {
                     )}
 
                     <form onSubmit={handleLogin} className="space-y-5">
-                        {/* Email Input */}
+                        {/* Email / Username Input */}
                         <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Identity Account Email</label>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Email or Username</label>
                             <div className="relative group">
                                 <Mail size={14} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-800 transition-colors" />
                                 <input
-                                    type="email" required
+                                    type="text" required
                                     value={email} onChange={(e) => setEmail(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-slate-400 outline-hidden transition-all shadow-3xs"
-                                    placeholder="ops@chargevolt.com"
+                                    placeholder="ops@chargevolt.com or username"
                                 />
                             </div>
                         </div>

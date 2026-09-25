@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
 const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 const { touchCompany } = require('../utils/touchCompany');
@@ -562,28 +563,66 @@ exports.syncOperatorLogin = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const user = existingUser
-            ? await prisma.user.update({
+        let user;
+        let created = false;
+
+        if (existingUser) {
+            user = await prisma.user.update({
                 where: { id: existingUser.id },
                 data: { password: hashedPassword, status: 'ACTIVE', isActivated: true }
-            })
-            : await prisma.user.create({
-                data: {
-                    email: loginIdentifier,
-                    password: hashedPassword,
-                    role: 'COMPANY_ADMIN',
-                    companyId: company.id,
-                    isActivated: true,
-                    status: 'ACTIVE'
-                }
             });
+        } else {
+            try {
+                user = await prisma.user.create({
+                    data: {
+                        email: loginIdentifier,
+                        password: hashedPassword,
+                        role: 'COMPANY_ADMIN',
+                        companyId: company.id,
+                        isActivated: true,
+                        status: 'ACTIVE',
+                        // activationToken is a nullable @unique column - on SQL Server (unlike
+                        // MySQL/Postgres) a unique index treats multiple NULLs as duplicates, so
+                        // leaving this unset collides with any other user that also has it unset
+                        // (the seeded Super Admin does). This account skips email verification
+                        // entirely, so the value itself is never read back - it only needs to be
+                        // distinct, matching the ARCHIVED_* convention verifyEmailToken already
+                        // uses for spent tokens.
+                        activationToken: `SYNCED_${company.id}_${crypto.randomBytes(8).toString('hex')}`
+                    }
+                });
+                created = true;
+            } catch (createError) {
+                // Lost a race against a concurrent sync call for this same username (the
+                // findUnique check above and this create() aren't atomic together) - refetch
+                // the row that won instead of surfacing a 500, and fall back to the same
+                // ownership check/update path as if it had been found the first time.
+                if (createError.code === 'P2002') {
+                    const raceWinner = await prisma.user.findUnique({ where: { email: loginIdentifier } });
+
+                    if (!raceWinner || raceWinner.companyId !== company.id) {
+                        return res.status(409).json({
+                            success: false,
+                            message: "Conflict: this username is already registered to a different operator account."
+                        });
+                    }
+
+                    user = await prisma.user.update({
+                        where: { id: raceWinner.id },
+                        data: { password: hashedPassword, status: 'ACTIVE', isActivated: true }
+                    });
+                } else {
+                    throw createError;
+                }
+            }
+        }
 
         await prisma.auditLog.create({
             data: {
-                action: existingUser ? 'UPDATE' : 'CREATE',
+                action: created ? 'CREATE' : 'UPDATE',
                 entity: 'USER',
                 entityId: user.id,
-                details: `Partner sync ${existingUser ? 'rotated credentials for' : 'provisioned'} operator login "${loginIdentifier}" for "${company.name}" (Ref: ${company.operatorReferenceId || 'n/a'}).`,
+                details: `Partner sync ${created ? 'provisioned' : 'rotated credentials for'} operator login "${loginIdentifier}" for "${company.name}" (Ref: ${company.operatorReferenceId || 'n/a'}).`,
                 ipAddress: clientIp
             }
         });
@@ -599,7 +638,7 @@ exports.syncOperatorLogin = async (req, res) => {
                 operator_reference_id: company.operatorReferenceId,
                 username: loginIdentifier,
                 user_id: user.id,
-                created: !existingUser
+                created
             }
         });
 

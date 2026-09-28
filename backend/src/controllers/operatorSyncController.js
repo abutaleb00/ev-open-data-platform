@@ -511,10 +511,23 @@ exports.syncOperatorTariffs = async (req, res) => {
 // username collision against a DIFFERENT company's existing account is refused
 // (409) rather than silently reassigning that login; a resync against the SAME
 // company's existing account just rotates its password hash in place.
+//
+// Accepts the flat shape documented in the Postman collection
+// ({ operator_reference_id, username, password }) as well as an event-wrapper
+// shape some upstream systems send ({ name: "ResetPassword", operator_reference_id,
+// email, data: { operator_reference_id, username, password } }). The wrapper's
+// top-level 'name' is the event label, not the operator's display name, so it's
+// never used to touch company.name; 'email' IS treated as the operator's real
+// contact address and upserts company.contactEmail if supplied and different.
 exports.syncOperatorLogin = async (req, res) => {
     try {
         const payload = req.body || {};
-        const { username, password, operator_reference_id } = payload;
+        const credentials = (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data))
+            ? payload.data
+            : payload;
+        const username = credentials.username;
+        const password = credentials.password;
+        const operator_reference_id = payload.operator_reference_id || credentials.operator_reference_id;
         const clientIp = getClientIp(req);
         const isMasterKey = req.isMasterKey === true;
 
@@ -548,7 +561,31 @@ exports.syncOperatorLogin = async (req, res) => {
             });
         }
 
-        const company = resolution.company;
+        let company = resolution.company;
+
+        // The event-wrapper shape's top-level 'email' is the operator's real contact
+        // address (unlike its top-level 'name', which is the event label, e.g.
+        // "ResetPassword" - deliberately not used to touch company.name). Update it
+        // if supplied and different; leave it alone otherwise so a plain
+        // { operator_reference_id, username, password } call is a no-op here.
+        const contactEmail = payload.email || credentials.email;
+        if (contactEmail && typeof contactEmail === 'string' && contactEmail.trim() && contactEmail.trim() !== company.contactEmail) {
+            company = await prisma.company.update({
+                where: { id: company.id },
+                data: { contactEmail: contactEmail.trim() }
+            });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'UPDATE',
+                    entity: 'COMPANY',
+                    entityId: company.id,
+                    details: `Partner login sync updated operator "${company.name}" contact email.`,
+                    ipAddress: clientIp
+                }
+            });
+        }
+
         const loginIdentifier = username.trim();
 
         const existingUser = await prisma.user.findUnique({ where: { email: loginIdentifier } });

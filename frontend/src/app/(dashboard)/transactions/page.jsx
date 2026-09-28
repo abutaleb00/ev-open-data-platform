@@ -59,8 +59,8 @@ export default function TransactionsPage() {
                         <Receipt size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Billing & Transactions</h2>
-                        <p className="text-sm text-slate-500 mt-0.5 font-medium">Historical log of completed charging sessions and revenue</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Transactions</h2>
+                        <p className="text-sm text-slate-500 mt-1">Completed sessions and the money they collected.</p>
                     </div>
                 </div>
 

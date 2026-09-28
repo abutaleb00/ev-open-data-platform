@@ -20,33 +20,33 @@ export default function Hero() {
 
                 {/* Left Column: Direct Hook Copy */}
                 <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-                    <div className="inline-flex items-center space-x-2 bg-slate-900 text-[#FFAF00] px-3.5 py-1.5 rounded-xl font-bold text-xs tracking-wider uppercase border border-slate-800">
+                    <div className="inline-flex items-center gap-2 bg-white text-slate-700 px-3 py-1.5 rounded-full text-sm font-medium border border-slate-200 shadow-sm">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#73CB44] opacity-75" />
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#73CB44]" />
                         </span>
-                        <span>Now Onboarding Charge Point Operators</span>
+                        <span>Open to charge point operators</span>
                     </div>
-                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
+                    <h1 className="text-4xl sm:text-5xl md:text-[3.4rem] font-semibold text-slate-950 tracking-tight leading-[1.08]">
                         One Platform for Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFAF00] to-[#73CB44]">Open EV Charging Data</span>
                     </h1>
-                    <p className="text-base sm:text-lg text-slate-500 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
+                    <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                         Manage your charging locations, connectors and tariffs in one dashboard — then publish an OCPI-compliant open data feed that maps, apps and roaming partners can plug straight into. No custom integration work required.
                     </p>
 
                     {/* Integrated Navigation Loops */}
                     <div className="pt-4 flex flex-col sm:flex-row flex-wrap justify-center lg:justify-start gap-4">
-                        <Link prefetch={false} href="/login" className="flex items-center justify-center space-x-2 bg-[#FFAF00] text-slate-950 font-black px-6 py-3.5 rounded-xl hover:bg-[#e09e00] transition-all shadow-lg shadow-[#FFAF00]/10 active:scale-98 text-sm">
+                        <Link prefetch={false} href="/login" className="flex items-center justify-center gap-2 bg-[#F5A524] text-slate-950 font-semibold px-6 py-3.5 rounded-xl hover:bg-[#e09a12] transition-all shadow-sm text-sm">
                             <span>Get Started</span>
                             <ArrowRight size={16} />
                         </Link>
 
-                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#FFAF00] transition-all shadow-2xs text-sm">
+                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 font-medium px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all text-sm">
                             <MapPin size={16} className="text-slate-400" />
                             <span>Locations Feed</span>
                         </Link>
 
-                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 font-bold px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:text-[#73CB44] transition-all shadow-2xs text-sm">
+                        <Link prefetch={false} href="/open-data/docs" className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 font-medium px-5 py-3.5 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all text-sm">
                             <DollarSign size={16} className="text-slate-400" />
                             <span>Tariffs Feed</span>
                         </Link>
@@ -55,7 +55,7 @@ export default function Hero() {
                     {/* Trust Badge Row */}
                     <div className="pt-2 flex flex-wrap justify-center lg:justify-start gap-x-6 gap-y-2">
                         {TRUST_BADGES.map((badge) => (
-                            <div key={badge.label} className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                            <div key={badge.label} className="flex items-center gap-1.5 text-sm text-slate-500">
                                 <badge.icon size={14} className="text-[#73CB44]" />
                                 <span>{badge.label}</span>
                             </div>

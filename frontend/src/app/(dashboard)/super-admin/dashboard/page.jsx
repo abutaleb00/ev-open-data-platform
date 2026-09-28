@@ -44,7 +44,7 @@ export default function IntegratedDashboardPage() {
     if (loading || !data) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4 px-4 select-none">
-                <BrandLoader label="Syncing platform telemetry matrix" />
+                <BrandLoader label="Loading the platform" />
             </div>
         );
     }
@@ -58,15 +58,15 @@ export default function IntegratedDashboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
                 <div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-slate-900 text-white px-2.5 py-0.5 rounded-md">
-                            {role?.replace('_', ' ')} Command Node
+                        <span className="text-xs font-medium bg-slate-900 text-white px-2.5 py-1 rounded-md">
+                            {role?.replaceAll('_', ' ')}
                         </span>
-                        <div className="flex items-center space-x-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100/60 px-2 py-0.5 rounded-md">
+                        <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-1 rounded-md">
                             <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-bold uppercase tracking-wide">Live Stream</span>
+                            <span className="text-xs font-medium">Live</span>
                         </div>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1.5">Platform Operations Control</h2>
+                    <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight mt-2">Platform overview</h2>
                 </div>
 
                 {/* Tenancy Scope Dropdown Filters */}
@@ -77,9 +77,9 @@ export default function IntegratedDashboardPage() {
                             <select
                                 value={selectedCompany}
                                 onChange={(e) => { setLoading(true); setSelectedCompany(e.target.value); }}
-                                className="bg-transparent text-xs font-bold text-slate-700 outline-hidden pr-4 py-0.5 w-full cursor-pointer"
+                                className="bg-transparent text-sm text-slate-700 outline-hidden pr-4 py-0.5 w-full cursor-pointer"
                             >
-                                <option value="">Global Network View</option>
+                                <option value="">All operators</option>
                                 {companies.map((c) => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
@@ -89,7 +89,7 @@ export default function IntegratedDashboardPage() {
                     <button
                         onClick={() => { setLoading(true); fetchMetrics(); }}
                         className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-sm active:scale-98 cursor-pointer shrink-0"
-                        title="Force refresh"
+                        title="Refresh"
                     >
                         <RefreshCw size={15} />
                     </button>
@@ -103,13 +103,13 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs relative overflow-hidden group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Operational Sites</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{summary?.locations?.total || 0}</h3>
+                            <p className="text-sm text-slate-500">Locations</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">{summary?.locations?.total || 0}</h3>
                         </div>
                         <div className="p-3 bg-purple-50 text-purple-600 rounded-xl border border-purple-100/60 shadow-3xs"><MapPin size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Moderation Queue</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Waiting for approval</span>
                         <span className={`px-2 py-0.5 rounded-sm text-[10px] ${summary?.locations?.pendingApproval > 0 ? 'bg-amber-50 text-amber-700 font-black border border-amber-200' : 'bg-slate-100 text-slate-500'}`}>
                             {summary?.locations?.pendingApproval || 0} Pending
                         </span>
@@ -120,13 +120,13 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs relative overflow-hidden group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hardware Assets</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{summary?.hardware?.totalUnits || 0}</h3>
+                            <p className="text-sm text-slate-500">Charge points</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">{summary?.hardware?.totalUnits || 0}</h3>
                         </div>
                         <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100/60 shadow-3xs"><Zap size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Deployments Pending</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Waiting for approval</span>
                         <span className={`px-2 py-0.5 rounded-sm text-[10px] ${summary?.hardware?.pendingApproval > 0 ? 'bg-amber-50 text-amber-700 font-black border border-amber-200' : 'bg-slate-100 text-slate-500'}`}>
                             {summary?.hardware?.pendingApproval || 0} Blocked
                         </span>
@@ -137,13 +137,13 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs relative overflow-hidden group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Gross Revenue</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">£{(summary?.financials?.totalRevenueCollected || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</h3>
+                            <p className="text-sm text-slate-500">Revenue</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">£{(summary?.financials?.totalRevenueCollected || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</h3>
                         </div>
                         <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100/60 shadow-3xs"><DollarSign size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Average/Session</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Average session</span>
                         <span className="text-emerald-600 font-extrabold bg-emerald-50/50 px-1.5 py-0.5 rounded border border-emerald-100/40">£{summary?.financials?.averageSessionValue || 0}</span>
                     </div>
                 </div>
@@ -152,16 +152,16 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs relative overflow-hidden group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Energy Transferred</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                                {(summary?.financials?.totalKwhDispensated || 0).toLocaleString('en-GB', { maximumFractionDigits: 1 })} <span className="text-xs font-bold text-slate-400 uppercase">kWh</span>
+                            <p className="text-sm text-slate-500">Energy delivered</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">
+                                {(summary?.financials?.totalKwhDispensated || 0).toLocaleString('en-GB', { maximumFractionDigits: 1 })} <span className="text-sm font-medium text-slate-400">kWh</span>
                             </h3>
                         </div>
                         <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100/60 shadow-3xs"><Layers size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Completed Load Outs</span>
-                        <span className="text-slate-700 font-extrabold">{summary?.telemetry?.completedSessionsTotal || 0} tx</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Completed sessions</span>
+                        <span className="text-slate-800 font-medium">{summary?.telemetry?.completedSessionsTotal || 0}</span>
                     </div>
                 </div>
             </div>
@@ -171,25 +171,25 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-white shadow-md">
                     <div className="flex items-center space-x-2 mb-4">
                         <Cpu size={16} className="text-purple-400" />
-                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">Platform Core Diagnostics Matrix</h4>
+                        <h4 className="text-sm font-medium text-slate-300">Platform</h4>
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Registered Operators</span>
+                            <span className="text-xs text-slate-400 block">Operators</span>
                             <div className="flex items-center space-x-2">
                                 <Building2 size={14} className="text-slate-600" />
                                 <span className="text-lg font-black">{systemStats.totalCompanies}</span>
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total User Accounts</span>
+                            <span className="text-xs text-slate-400 block">Users</span>
                             <div className="flex items-center space-x-2">
                                 <Users size={14} className="text-slate-600" />
                                 <span className="text-lg font-black">{systemStats.totalUsers}</span>
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">User Activation Queue</span>
+                            <span className="text-xs text-slate-400 block">Waiting to activate</span>
                             <div className="flex items-center space-x-2">
                                 <Hourglass size={14} className="text-slate-600" />
                                 <span className={`text-lg font-black ${systemStats.pendingUsersCount > 0 ? 'text-amber-400' : 'text-white'}`}>
@@ -198,7 +198,7 @@ export default function IntegratedDashboardPage() {
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Third-Party API Keys</span>
+                            <span className="text-xs text-slate-400 block">Active API keys</span>
                             <div className="flex items-center space-x-2">
                                 <Key size={14} className="text-slate-600" />
                                 <span className="text-lg font-black text-emerald-400">{systemStats.activeApiKeysCount}</span>
@@ -217,16 +217,16 @@ export default function IntegratedDashboardPage() {
                     {/* Real-time Load Capacity Matrix */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                         <div>
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center"><TrendingUp size={13} className="mr-1 text-slate-400" /> Network Telemetry Rate</h4>
-                            <p className="text-[11px] text-slate-400 mt-0.5">Live cluster infrastructure utilization ratio</p>
+                            <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5"><TrendingUp size={15} className="text-slate-400" /> How busy it is</h4>
+                            <p className="text-sm text-slate-500 mt-1">Share of connectors in use right now</p>
                         </div>
                         <div className="space-y-2">
                             <div className="flex items-baseline justify-between">
-                                <span className="text-3xl font-black text-slate-900 tracking-tight">
+                                <span className="text-3xl font-semibold text-slate-950 tracking-tight">
                                     {summary?.telemetry?.liveUtilizationRatePercentage || 0}%
                                 </span>
-                                <span className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md">
-                                    {summary?.telemetry?.activeChargingSessions || 0} Live Links
+                                <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
+                                    {summary?.telemetry?.activeChargingSessions || 0} charging now
                                 </span>
                             </div>
                             <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -241,7 +241,7 @@ export default function IntegratedDashboardPage() {
                     {/* Labeled Micro Connector Counters Mapping */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-3">
                         <div className="flex justify-between items-center mb-1">
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Connector Allocation Map</h4>
+                            <h4 className="text-sm font-semibold text-slate-900">Connectors</h4>
                             <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
                                 Total: {summary?.hardware?.connectors?.total || 0}
                             </span>
@@ -274,19 +274,19 @@ export default function IntegratedDashboardPage() {
                 <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
                         <div>
-                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center"><Clock size={14} className="mr-1 text-slate-400" /> Load Performance Telemetry</h4>
-                            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Genuine 7-day retrospective analytics window</p>
+                            <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5"><Clock size={15} className="text-slate-400" /> Last 7 days</h4>
+                            <p className="text-sm text-slate-500 mt-1">Revenue and energy from completed sessions</p>
                         </div>
                         <div className="flex space-x-1 bg-slate-100 border border-slate-200/50 p-1 rounded-xl self-stretch sm:self-auto text-center">
                             <button
                                 onClick={() => setActiveMetricView('revenue')}
-                                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${activeMetricView === 'revenue' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40' : 'text-slate-400 hover:text-slate-700'}`}
+                                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeMetricView === 'revenue' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 Revenue
                             </button>
                             <button
                                 onClick={() => setActiveMetricView('kwh')}
-                                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${activeMetricView === 'kwh' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40' : 'text-slate-400 hover:text-slate-700'}`}
+                                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeMetricView === 'kwh' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 Energy
                             </button>

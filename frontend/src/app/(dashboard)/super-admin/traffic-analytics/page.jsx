@@ -88,8 +88,8 @@ export default function TrafficAnalyticsPage() {
                         <BarChart3 size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">API Traffic Analytics</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Real-time open data stream usage, throttling metrics, and client telemetry</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Traffic</h2>
+                        <p className="text-sm text-slate-500 mt-1">How often the public feed is called, and when it is rate limited.</p>
                     </div>
                 </div>
 

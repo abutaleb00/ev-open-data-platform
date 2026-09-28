@@ -80,8 +80,8 @@ export default function DatasetPreviewPage() {
                         <Globe size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Dataset Broadcast Preview</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Inspect open compliance data and billing matrix feeds live</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Data preview</h2>
+                        <p className="text-sm text-slate-500 mt-1">What the public feed currently returns.</p>
                     </div>
                 </div>
 

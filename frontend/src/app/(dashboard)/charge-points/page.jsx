@@ -178,8 +178,8 @@ export default function ChargePointsPage() {
                         <Zap size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Hardware Charge Points (EVSEs)</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Manage physical charge points, connectors, and OCPI hardware capabilities</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Charge points</h2>
+                        <p className="text-sm text-slate-500 mt-1">The charging units at each location.</p>
                     </div>
                 </div>
 

@@ -68,19 +68,19 @@ export default function AnalyticsPage() {
             {/* 1. PREMIUM HEADER NODE CONTAINER */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-6 gap-4">
                 <div className="space-y-1">
-                    <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-slate-900 text-[10px] font-black uppercase tracking-wider text-slate-100 mb-1">
-                        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" /> Live Telemetry Matrix
+                    <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-slate-900 text-xs font-medium text-white mb-1">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" /> Live
                     </div>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight uppercase">Network Analytics Engine</h2>
-                    <p className="text-xs text-slate-500 font-bold tracking-wide uppercase">Core Infrastructure Diagnostics Framework & compliance diagnostics data logs.</p>
+                    <h2 className="text-2xl sm:text-3xl font-semibold text-slate-950 tracking-tight">Analytics</h2>
+                    <p className="text-sm text-slate-500">How the network is being used.</p>
                 </div>
                 <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs self-start md:self-auto">
                     <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs text-slate-700 uppercase">
                         {user?.role?.charAt(0) || 'O'}
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Access Node Privilege</p>
-                        <p className="text-xs font-black text-slate-800 uppercase tracking-wide">{user?.role?.replace('_', ' ') || 'Operator Context'}</p>
+                        <p className="text-xs text-slate-500">Signed in as</p>
+                        <p className="text-sm font-medium text-slate-800">{user?.role?.replaceAll('_', ' ') || 'Operator'}</p>
                     </div>
                 </div>
             </div>

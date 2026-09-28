@@ -84,8 +84,8 @@ export default function ApprovalsPage() {
                         <ShieldAlert size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Open Data Approvals</h2>
-                        <p className="text-sm text-slate-500 mt-0.5 font-medium">Verify structural integrity and coordinate validations before public broadcasting.</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Approvals</h2>
+                        <p className="text-sm text-slate-500 mt-1">New locations and charge points waiting to go on the public feed.</p>
                     </div>
                 </div>
                 <button onClick={fetchQueue} className="p-2.5 text-slate-500 hover:text-slate-900 bg-slate-50 rounded-xl border border-slate-200 hover:shadow-sm transition-all">

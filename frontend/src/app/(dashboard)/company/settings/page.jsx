@@ -85,8 +85,8 @@ export default function CompanySettingsPage() {
                     <Building2 size={24} />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Network Profile Workspace</h2>
-                    <p className="text-xs text-slate-400 font-bold mt-0.5">Customize corporate branding data parameters and public operator records</p>
+                    <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Company settings</h2>
+                    <p className="text-sm text-slate-500 mt-1">Your company name, contact details, and brand colour.</p>
                 </div>
             </div>
 

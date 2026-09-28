@@ -100,8 +100,8 @@ export default function AuditLogsPage() {
                         <ShieldAlert size={24} strokeWidth={2.2} />
                     </div>
                     <div>
-                        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">System Audit Logs</h2>
-                        <p className="text-xs sm:text-sm text-slate-400 mt-0.5 font-medium">Real-time immutable ledger tracking security states and telemetry modifications</p>
+                        <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">Audit log</h2>
+                        <p className="text-sm text-slate-500 mt-1">Who changed what, and when.</p>
                     </div>
                 </div>
 

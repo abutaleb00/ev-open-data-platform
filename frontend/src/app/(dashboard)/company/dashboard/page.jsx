@@ -47,7 +47,7 @@ export default function IntegratedDashboardPage() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400 space-y-4 px-4 select-none">
-                <BrandLoader label="Syncing corporate telemetry stream" />
+                <BrandLoader label="Loading your network" />
             </div>
         );
     }
@@ -59,18 +59,18 @@ export default function IntegratedDashboardPage() {
                     <AlertTriangle size={24} />
                 </div>
                 <div className="space-y-1">
-                    <h3 className="text-base font-black text-slate-900 tracking-tight">Tenancy Activation Required</h3>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed px-2">
-                        {data.message} This gate triggers if you access workspace environments before a platform Super Admin explicitly authorizes your network configuration metadata.
+                    <h3 className="text-lg font-semibold text-slate-900 tracking-tight">Your company is not active yet</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed px-2">
+                        {data.message} A platform admin needs to approve your company before this dashboard can load.
                     </p>
                 </div>
                 <div className="pt-2">
                     <button
                         onClick={() => { setLoading(true); fetchMetrics(); }}
-                        className="inline-flex items-center space-x-2 bg-slate-900 text-white font-bold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all cursor-pointer active:scale-98"
+                        className="inline-flex items-center gap-2 bg-slate-900 text-white font-medium text-sm px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all cursor-pointer"
                     >
                         <RefreshCw size={12} />
-                        <span>Re-test Handshake Sync</span>
+                        <span>Try again</span>
                     </button>
                 </div>
             </div>
@@ -88,22 +88,22 @@ export default function IntegratedDashboardPage() {
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs">
                 <div>
                     <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-slate-900 text-white px-2.5 py-0.5 rounded-md">
-                            {(role || 'COMPANY_ADMIN').replace('_', ' ')} Hub
+                        <span className="text-xs font-medium bg-slate-900 text-white px-2.5 py-1 rounded-md">
+                            {(role || 'COMPANY_ADMIN').replaceAll('_', ' ')}
                         </span>
-                        <div className="flex items-center space-x-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100/60 px-2 py-0.5 rounded-md">
+                        <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-1 rounded-md">
                             <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-bold uppercase tracking-wide">Live</span>
+                            <span className="text-xs font-medium">Live</span>
                         </div>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1.5">Network Operation Control</h2>
+                    <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight mt-2">Your network</h2>
                 </div>
 
                 <div className="flex items-center self-end sm:self-auto">
                     <button
                         onClick={() => { setLoading(true); fetchMetrics(); }}
                         className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-sm active:scale-98 cursor-pointer shrink-0"
-                        title="Force refresh telemetry"
+                        title="Refresh"
                     >
                         <RefreshCw size={15} />
                     </button>
@@ -117,14 +117,14 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Locations</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{summary.locations?.total || 0}</h3>
+                            <p className="text-sm text-slate-500">Locations</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">{summary.locations?.total || 0}</h3>
                         </div>
                         <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100/60"><MapPin size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Approved / Operational</span>
-                        <span className="text-slate-700 font-extrabold">{summary.locations?.active || 0} Active</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Approved</span>
+                        <span className="text-slate-800 font-medium">{summary.locations?.active || 0} active</span>
                     </div>
                 </div>
 
@@ -132,13 +132,13 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Stations Deployed</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{summary.hardware?.totalUnits || 0}</h3>
+                            <p className="text-sm text-slate-500">Charge points</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">{summary.hardware?.totalUnits || 0}</h3>
                         </div>
                         <div className="p-3 bg-amber-50 text-amber-600 rounded-xl border border-amber-100/60"><Zap size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Pending Approvals</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Waiting for approval</span>
                         <span className={`px-1.5 py-0.5 rounded-xs text-[10px] ${summary.hardware?.pendingApproval > 0 ? 'bg-amber-50 text-amber-700 font-black' : 'bg-slate-100 text-slate-500'}`}>
                             {summary.hardware?.pendingApproval || 0} Units
                         </span>
@@ -149,14 +149,14 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Gross Revenue</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">£{(summary.financials?.totalRevenueCollected || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</h3>
+                            <p className="text-sm text-slate-500">Revenue</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">£{(summary.financials?.totalRevenueCollected || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</h3>
                         </div>
                         <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100/60"><DollarSign size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Ticket Average</span>
-                        <span className="text-emerald-600 font-extrabold">£{summary.financials?.averageSessionValue || 0}</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Average session</span>
+                        <span className="text-emerald-700 font-medium">£{summary.financials?.averageSessionValue || 0}</span>
                     </div>
                 </div>
 
@@ -164,16 +164,16 @@ export default function IntegratedDashboardPage() {
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-2xs group">
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Output Load</p>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                                {(summary.financials?.totalKwhDispensated || 0).toLocaleString('en-GB', { maximumFractionDigits: 1 })} <span className="text-xs font-bold text-slate-400 uppercase">kWh</span>
+                            <p className="text-sm text-slate-500">Energy delivered</p>
+                            <h3 className="text-2xl font-semibold text-slate-950 tracking-tight">
+                                {(summary.financials?.totalKwhDispensated || 0).toLocaleString('en-GB', { maximumFractionDigits: 1 })} <span className="text-sm font-medium text-slate-400">kWh</span>
                             </h3>
                         </div>
                         <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100/60"><Layers size={20} /></div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-slate-400">Total Transactions</span>
-                        <span className="text-slate-700 font-extrabold">{summary.telemetry?.completedSessionsTotal || 0} items</span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Completed sessions</span>
+                        <span className="text-slate-800 font-medium">{summary.telemetry?.completedSessionsTotal || 0}</span>
                     </div>
                 </div>
             </div>
@@ -187,16 +187,16 @@ export default function IntegratedDashboardPage() {
                     {/* Live Cluster Capacity Metric Meter */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                         <div>
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center"><TrendingUp size={13} className="mr-1 text-slate-400" /> Network Capacity Utilization</h4>
-                            <p className="text-[11px] text-slate-400 mt-0.5">Live tenant interface socket load metrics</p>
+                            <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5"><TrendingUp size={15} className="text-slate-400" /> How busy it is</h4>
+                            <p className="text-sm text-slate-500 mt-1">Share of connectors in use right now</p>
                         </div>
                         <div className="space-y-2">
                             <div className="flex items-baseline justify-between">
-                                <span className="text-3xl font-black text-slate-900 tracking-tight">
+                                <span className="text-3xl font-semibold text-slate-950 tracking-tight">
                                     {summary.telemetry?.liveUtilizationRatePercentage || 0}%
                                 </span>
-                                <span className="text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md">
-                                    {summary.telemetry?.activeChargingSessions || 0} Active links
+                                <span className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
+                                    {summary.telemetry?.activeChargingSessions || 0} charging now
                                 </span>
                             </div>
                             <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -211,7 +211,7 @@ export default function IntegratedDashboardPage() {
                     {/* Labeled Micro Connector Counters Mapping */}
                     <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-3">
                         <div className="flex justify-between items-center mb-1">
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Connector Allocation Map</h4>
+                            <h4 className="text-sm font-semibold text-slate-900">Connectors</h4>
                             <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
                                 Outlets: {summary.hardware?.connectors?.total || 0}
                             </span>
@@ -244,19 +244,19 @@ export default function IntegratedDashboardPage() {
                 <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-xs space-y-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
                         <div>
-                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center"><Clock size={14} className="mr-1 text-slate-400" /> Retrospective Telemetry Performance</h4>
-                            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Rolling 7-day operations logging timeline window</p>
+                            <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5"><Clock size={15} className="text-slate-400" /> Last 7 days</h4>
+                            <p className="text-sm text-slate-500 mt-1">Revenue and energy from completed sessions</p>
                         </div>
                         <div className="flex space-x-1 bg-slate-100 border border-slate-200/50 p-1 rounded-xl self-stretch sm:self-auto text-center">
                             <button
                                 onClick={() => setActiveMetricView('revenue')}
-                                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${activeMetricView === 'revenue' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40' : 'text-slate-400 hover:text-slate-700'}`}
+                                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeMetricView === 'revenue' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 Revenue
                             </button>
                             <button
                                 onClick={() => setActiveMetricView('kwh')}
-                                className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${activeMetricView === 'kwh' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/40' : 'text-slate-400 hover:text-slate-700'}`}
+                                className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${activeMetricView === 'kwh' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 Energy
                             </button>
@@ -279,7 +279,7 @@ export default function IntegratedDashboardPage() {
 // Pure HTML/CSS High Fidelity Micro Chart Sub-component
 function PremiumDataExplorer({ chartMetrics = [], viewType }) {
     if (!chartMetrics.length) {
-        return <div className="h-56 flex items-center justify-center text-xs text-slate-400 font-semibold">No operational session histories parsed inside database logs.</div>;
+        return <div className="h-56 flex items-center justify-center text-sm text-slate-500">No sessions in this period yet.</div>;
     }
 
     const values = chartMetrics.map(d => viewType === 'revenue' ? d.revenue : d.kwh);

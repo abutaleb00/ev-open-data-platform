@@ -67,8 +67,8 @@ export default function LiveSessionsPage() {
                         </span>
                     </div>
                     <div>
-                        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Active Charging Sessions</h2>
-                        <p className="text-sm text-slate-500 mt-0.5 font-medium">Real-time telemetry and energy delivery tracking</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Live sessions</h2>
+                        <p className="text-sm text-slate-500 mt-1">Charging that is happening right now.</p>
                     </div>
                 </div>
 
@@ -78,19 +78,19 @@ export default function LiveSessionsPage() {
                     className="flex items-center justify-center space-x-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all shadow-sm font-bold active:scale-95 disabled:opacity-50"
                 >
                     {loading ? <BrandLoader size="xs" /> : <RefreshCw size={18} />}
-                    <span>Sync Telemetry</span>
+                    <span>Refresh</span>
                 </button>
             </div>
 
             {/* Live Sessions Grid */}
             {loading && sessions.length === 0 ? (
                 <div className="bg-white rounded-2xl p-16 text-center border border-slate-200/60">
-                    <BrandLoader label="Pinging network hardware" />
+                    <BrandLoader label="Loading live sessions" />
                 </div>
             ) : sessions.length === 0 ? (
                 <div className="bg-white rounded-2xl p-16 text-center border border-slate-200/60 flex flex-col items-center">
                     <BatteryCharging size={48} className="text-slate-300 mb-4" strokeWidth={1.5} />
-                    <h3 className="text-xl font-extrabold text-slate-900 mb-1">No EVs Charging</h3>
+                    <h3 className="text-xl font-semibold text-slate-950 mb-1">Nothing is charging</h3>
                     <p className="text-slate-500 font-medium text-sm max-w-md">
                         There are currently no active sessions on your network. When a driver plugs in and initiates a charge, it will appear here instantly.
                     </p>

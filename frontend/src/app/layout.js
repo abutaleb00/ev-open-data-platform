@@ -33,7 +33,7 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#F8FAFC]" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-[#F4F6F8] font-sans text-slate-900" suppressHydrationWarning>
         {children}
       </body>
     </html>

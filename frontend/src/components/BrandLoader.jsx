@@ -104,16 +104,16 @@ export default function BrandLoader({ size = 'md', tone = 'brand', label, sublab
 
     if (fullscreen) {
         return (
-            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-[#FFAF00]">
-                <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
-                    <Mark size={size} tone="dark" />
+            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-[#0c1222]">
+                <div className={`flex flex-col items-center justify-center gap-5 ${className}`}>
+                    <Mark size={size} tone="brand" />
                     {label && (
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-900 animate-pulse text-center">
+                        <p className="text-sm font-medium text-white text-center">
                             {label}
                         </p>
                     )}
                     {sublabel && (
-                        <p className="text-[10px] font-bold text-slate-900/60 text-center max-w-xs">{sublabel}</p>
+                        <p className="text-xs text-slate-400 text-center max-w-xs">{sublabel}</p>
                     )}
                 </div>
             </div>

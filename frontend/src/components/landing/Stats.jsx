@@ -73,17 +73,17 @@ export default function Stats() {
 
             <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
-                    <span className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#FFAF00] bg-[#FFAF00]/10 border border-[#FFAF00]/20 px-3 py-1.5 rounded-full">
+                    <span className="inline-flex items-center gap-2 text-xs font-medium text-amber-200 bg-amber-400/10 border border-amber-400/20 px-3 py-1.5 rounded-full">
                         <span className="relative flex h-1.5 w-1.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#73CB44] opacity-75" />
                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#73CB44]" />
                         </span>
                         Live From Production
                     </span>
-                    <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                    <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">
                         Straight From Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-300">Live API</span>
                     </h2>
-                    <p className="text-sm text-slate-400 font-medium">
+                    <p className="text-sm sm:text-base text-slate-400">
                         These numbers are fetched from our own public feed in real time, right now — not marketing copy.
                     </p>
                 </div>
@@ -97,8 +97,8 @@ export default function Stats() {
                             <div className={`mx-auto h-11 w-11 rounded-xl flex items-center justify-center border ${tile.color} group-hover:scale-110 transition-transform`}>
                                 <tile.icon size={20} />
                             </div>
-                            <h3 className="mt-4 text-2xl sm:text-3xl font-black text-white tracking-tight tabular-nums">{tile.value}</h3>
-                            <p className="mt-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">{tile.label}</p>
+                            <h3 className="mt-4 text-2xl sm:text-3xl font-semibold text-white tracking-tight tabular-nums">{tile.value}</h3>
+                            <p className="mt-1 text-sm text-slate-400">{tile.label}</p>
                         </div>
                     ))}
                 </div>

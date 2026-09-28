@@ -147,8 +147,8 @@ export default function CompaniesPage() {
                         <Building2 size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Operators</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Manage EV charging networks, approval workflows, and tenancy partitions</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Operators</h2>
+                        <p className="text-sm text-slate-500 mt-1">Companies on the platform, and whether they are active.</p>
                     </div>
                 </div>
 

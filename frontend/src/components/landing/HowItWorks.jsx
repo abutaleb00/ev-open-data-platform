@@ -14,13 +14,13 @@ export default function HowItWorks() {
         <section id="how-it-works" className="relative bg-slate-50 py-24 sm:py-28 border-y border-slate-200/60">
             <div className="max-w-7xl mx-auto px-6">
                 <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
-                        From Signup to Live Data
+                    <span className="text-sm font-medium text-slate-700 bg-white px-3 py-1.5 rounded-full border border-slate-200">
+                        From signup to live data
                     </span>
-                    <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                    <h2 className="text-3xl sm:text-4xl font-semibold text-slate-950 tracking-tight">
                         How It Works
                     </h2>
-                    <p className="text-base text-slate-500 font-medium leading-relaxed">
+                    <p className="text-base text-slate-600 leading-relaxed">
                         Four steps stand between you and a fully published, standards-compliant charging network.
                     </p>
                 </div>
@@ -42,8 +42,8 @@ export default function HowItWorks() {
                                     {idx + 1}
                                 </span>
                             </div>
-                            <h3 className="text-sm font-black text-slate-900 tracking-tight">{step.title}</h3>
-                            <p className="text-xs text-slate-500 font-medium leading-relaxed">{step.description}</p>
+                            <h3 className="text-base font-semibold text-slate-950 tracking-tight">{step.title}</h3>
+                            <p className="text-sm text-slate-600 leading-relaxed">{step.description}</p>
                         </div>
                     ))}
                 </div>

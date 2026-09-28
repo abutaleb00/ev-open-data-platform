@@ -225,8 +225,8 @@ export default function TariffsPage() {
                         <DollarSign size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Tariff pricing plans</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Configure dynamic monetary pricing bands per energy unit consumption</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Tariffs</h2>
+                        <p className="text-sm text-slate-500 mt-1">What drivers pay, and when those prices apply.</p>
                     </div>
                 </div>
 

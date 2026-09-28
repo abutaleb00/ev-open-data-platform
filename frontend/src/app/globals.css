@@ -1,28 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f6f8;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --muted: #64748b;
+  --line: #e6eaf0;
+  --amber: #f5a524;
+  --green: #3f9d32;
+  --sidebar: #0c1222;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #f5a524;
+  color: #0f172a;
+}
+
+:focus-visible {
+  outline: 2px solid #f5a524;
+  outline-offset: 2px;
+}
+
+/* Quiet scrollbars so long tables and sidebars don't look like default OS chrome. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 @keyframes travel-right {
@@ -43,4 +82,39 @@ body {
 @keyframes brand-loader-ping {
   0% { transform: scale(1); opacity: 0.35; }
   75%, 100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* Signed-in workspace. Pages still use the older dense utility classes;
+   these rules calm type, case, and selection without rewriting each screen. */
+.workspace .uppercase:not(.font-mono) {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.workspace .font-black,
+.workspace .font-extrabold {
+  font-weight: 600;
+}
+
+.workspace .tracking-widest,
+.workspace .tracking-wider,
+.workspace .tracking-wide {
+  letter-spacing: normal;
+}
+
+.workspace .text-\[9px\],
+.workspace .text-\[10px\],
+.workspace .text-\[11px\] {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.workspace :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]) {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.workspace .select-none {
+  -webkit-user-select: text;
+  user-select: text;
 }

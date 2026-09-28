@@ -151,14 +151,14 @@ export default function MaintenanceAlertPage() {
                         <ShieldAlert size={24} strokeWidth={2.5} className="text-slate-950" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">System Controls & Traffic Matrix</h2>
-                        <p className="text-sm text-slate-500 mt-0.5 font-medium">Independently manage maintenance overrides and API traffic rate limits</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">System alerts</h2>
+                        <p className="text-sm text-slate-500 mt-1">Maintenance messages and how often the public feed can be called.</p>
                     </div>
                 </div>
 
                 <div className="flex items-center space-x-2 bg-slate-900 text-[#FFAF00] px-3.5 py-1.5 rounded-xl text-xs font-mono font-black uppercase tracking-wider border border-slate-800">
                     <Radio size={12} className={globalAlert ? "animate-pulse text-[#73CB44]" : "text-slate-500"} />
-                    <span>Status: {globalAlert ? 'System Intercept Active' : 'Normal Operations'}</span>
+                    <span>{globalAlert ? 'Alert on' : 'Running normally'}</span>
                 </div>
             </div>
 

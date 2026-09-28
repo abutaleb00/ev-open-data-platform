@@ -78,14 +78,14 @@ export default function SettingsPage() {
         try {
             const response = await api.put('/users/profile', formData);
             if (response.data.success) {
-                setProfileSuccess('Profile credentials synchronized successfully!');
+                setProfileSuccess('Profile saved.');
                 const currentToken = Cookies.get('token');
                 // Sync updated user context with the state store globally
                 login(response.data.data, currentToken);
                 setTimeout(() => setProfileSuccess(''), 3000);
             }
         } catch (error) {
-            alert(error.response?.data?.message || 'Profile modification failed.');
+            alert(error.response?.data?.message || 'Could not save your profile.');
         } finally {
             setSavingProfile(false);
         }
@@ -107,12 +107,12 @@ export default function SettingsPage() {
                 newPassword: passwords.newPassword
             });
             if (response.data.success) {
-                setPasswordSuccess('Password successfully updated!');
+                setPasswordSuccess('Password updated.');
                 setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
                 setTimeout(() => setPasswordSuccess(''), 3000);
             }
         } catch (error) {
-            setPasswordError(error.response?.data?.message || 'Password update failed.');
+            setPasswordError(error.response?.data?.message || 'Could not update your password.');
         } finally {
             setChangingPassword(false);
         }
@@ -121,7 +121,7 @@ export default function SettingsPage() {
     if (fetchingData) {
         return (
             <div className="flex flex-col items-center justify-center p-24 text-slate-400 space-y-4">
-                <BrandLoader label="Fetching verified account attributes" />
+                <BrandLoader label="Loading your account" />
             </div>
         );
     }
@@ -130,18 +130,14 @@ export default function SettingsPage() {
         <div className="max-w-5xl mx-auto space-y-8 px-4 py-2 select-none">
 
             {/* Premium Immersive Header Banner */}
-            <div className="relative bg-slate-900 p-8 rounded-3xl shadow-xl overflow-hidden border border-slate-800">
-                {/* Subtle Modern Glow Accents */}
-                <div className="absolute top-0 right-0 w-[350px] h-[350px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-[250px] h-[350px] bg-emerald-500/5 rounded-full blur-[80px] pointer-events-none" />
-
-                <div className="relative flex items-center space-x-5 z-10">
-                    <div className="p-3.5 bg-slate-800 border border-slate-700 rounded-2xl text-[#FFAF00] shadow-md">
-                        <SettingsIcon size={24} />
+            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 bg-amber-50 border border-amber-100 rounded-xl text-amber-600 flex items-center justify-center">
+                        <SettingsIcon size={22} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white tracking-tight">Identity Settings</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Verify system permissions, modify metadata records, and secure credentials</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Account settings</h2>
+                        <p className="text-sm text-slate-500 mt-1">Your name, contact details, and password.</p>
                     </div>
                 </div>
             </div>
@@ -152,23 +148,23 @@ export default function SettingsPage() {
                 <div className="w-full md:w-64 shrink-0 bg-white p-3 rounded-3xl border border-slate-200 shadow-sm space-y-1">
                     <button
                         onClick={() => setActiveTab('profile')}
-                        className={`w-full flex cursor-pointer items-center space-x-3 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all relative ${activeTab === 'profile'
-                                ? 'bg-slate-900 text-white shadow-md'
-                                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                        className={`w-full flex cursor-pointer items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'profile'
+                                ? 'bg-slate-950 text-white'
+                                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-50'
                             }`}
                     >
-                        <User size={14} strokeWidth={2.5} />
-                        <span>Workspace Account</span>
+                        <User size={16} />
+                        <span>Profile</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('security')}
-                        className={`w-full flex cursor-pointer items-center space-x-3 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all relative ${activeTab === 'security'
-                                ? 'bg-slate-900 text-white shadow-md'
-                                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                        className={`w-full flex cursor-pointer items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'security'
+                                ? 'bg-slate-950 text-white'
+                                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-50'
                             }`}
                     >
-                        <Shield size={14} strokeWidth={2.5} />
-                        <span>Security Access</span>
+                        <Shield size={16} />
+                        <span>Password</span>
                     </button>
                 </div>
 
@@ -179,8 +175,8 @@ export default function SettingsPage() {
                     {activeTab === 'profile' && (
                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-200">
                             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-                                <h3 className="text-base font-black text-slate-900 uppercase tracking-wider">Personal Information Matrix</h3>
-                                <p className="text-xs text-slate-400 font-medium mt-0.5">Configure system-wide profile variables mapped across operations logs.</p>
+                                <h3 className="text-base font-semibold text-slate-950">Profile</h3>
+                                <p className="text-sm text-slate-500 mt-1">This is what other admins see on your account.</p>
                             </div>
 
                             <form onSubmit={handleSaveProfile} className="p-6 sm:p-8 space-y-6">
@@ -222,7 +218,7 @@ export default function SettingsPage() {
                                                 const file = e.target.files[0];
                                                 if (file) {
                                                     if (file.size > 2 * 1024 * 1024) {
-                                                        alert("Image file size bounds must measure below 2MB.");
+                                                        alert("Please choose an image under 2MB.");
                                                         return;
                                                     }
                                                     const reader = new FileReader();
@@ -236,9 +232,9 @@ export default function SettingsPage() {
                                     </div>
 
                                     <div className="space-y-1 text-center sm:text-left">
-                                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Profile Frame Identity</h4>
-                                        <p className="text-xs text-slate-400 font-medium max-w-sm leading-relaxed">
-                                            Select the vector viewport box to map local graphic profiles. Accepts JPEG, PNG, or WebP files bounded under 2MB.
+                                        <h4 className="text-sm font-medium text-slate-800">Photo</h4>
+                                        <p className="text-sm text-slate-500 max-w-sm leading-relaxed">
+                                            Click the photo to upload a JPEG, PNG, or WebP under 2MB.
                                         </p>
                                         {formData.avatarUrl && (
                                             <button
@@ -246,7 +242,7 @@ export default function SettingsPage() {
                                                 onClick={() => setFormData({ ...formData, avatarUrl: '' })}
                                                 className="text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200/60 px-2.5 py-1 rounded-lg transition-colors cursor-pointer mt-1"
                                             >
-                                                Purge Image Cache
+                                                Remove photo
                                             </button>
                                         )}
                                     </div>
@@ -255,8 +251,8 @@ export default function SettingsPage() {
                                 {/* INPUT CONTROLS DISTRIBUTION STRUCTURAL GRID */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                            <User size={12} className="mr-1.5 text-slate-400" /> Administrative Full Name
+                                        <label className="text-sm font-medium text-slate-700 flex items-center">
+                                            <User size={14} className="mr-1.5 text-slate-400" /> Full name
                                         </label>
                                         <input
                                             type="text" required value={formData.name}
@@ -266,8 +262,8 @@ export default function SettingsPage() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                            <Mail size={12} className="mr-1.5 text-slate-400" /> Account Router Email Address
+                                        <label className="text-sm font-medium text-slate-700 flex items-center">
+                                            <Mail size={14} className="mr-1.5 text-slate-400" /> Email
                                         </label>
                                         <input
                                             type="email" required value={formData.email}
@@ -277,8 +273,8 @@ export default function SettingsPage() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                            <Phone size={12} className="mr-1.5 text-slate-400" /> Help Registry Phone Number
+                                        <label className="text-sm font-medium text-slate-700 flex items-center">
+                                            <Phone size={14} className="mr-1.5 text-slate-400" /> Phone
                                         </label>
                                         <input
                                             type="text" placeholder="+44 7700 900077" value={formData.phoneNumber}
@@ -288,8 +284,8 @@ export default function SettingsPage() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                            <MapPin size={12} className="mr-1.5 text-slate-400" /> Regional Branch Headquarters Location
+                                        <label className="text-sm font-medium text-slate-700 flex items-center">
+                                            <MapPin size={14} className="mr-1.5 text-slate-400" /> Location
                                         </label>
                                         <input
                                             type="text" placeholder="London Corporate Hub, UK" value={formData.locationStr}
@@ -303,9 +299,9 @@ export default function SettingsPage() {
                                 <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100/80 flex items-start space-x-3.5">
                                     <Building2 size={18} className="text-indigo-500 shrink-0 mt-0.5" />
                                     <div className="space-y-0.5">
-                                        <p className="text-xs font-black text-slate-900 uppercase tracking-wide">Workspace Parent Domain Group ({userRole})</p>
-                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                                            Account variables link automatically under isolated network data constraints assigned to: <span className="font-extrabold text-indigo-700">{parentCompany?.name || 'Global Core Context'}</span>.
+                                        <p className="text-sm font-medium text-slate-900">Company · {userRole?.replaceAll('_', ' ')}</p>
+                                        <p className="text-sm text-slate-600 leading-relaxed">
+                                            This account belongs to <span className="font-medium text-slate-900">{parentCompany?.name || 'the platform'}</span>.
                                         </p>
                                     </div>
                                 </div>
@@ -318,12 +314,12 @@ export default function SettingsPage() {
                                         {savingProfile ? (
                                             <>
                                                 <BrandLoader size="xs" />
-                                                <span>Saving Metadata...</span>
+                                                <span>Saving…</span>
                                             </>
                                         ) : (
                                             <>
                                                 <Save size={12} />
-                                                <span>Save Profile Alignment</span>
+                                                <span>Save profile</span>
                                             </>
                                         )}
                                     </button>
@@ -336,10 +332,8 @@ export default function SettingsPage() {
                     {activeTab === 'security' && (
                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-200">
                             <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-                                <h3 className="text-base font-black text-slate-900 uppercase tracking-wider flex items-center">
-                                    Security Credentials Vault
-                                </h3>
-                                <p className="text-xs text-slate-400 font-medium mt-0.5">Rotate account password verification properties safely.</p>
+                                <h3 className="text-base font-semibold text-slate-950">Password</h3>
+                                <p className="text-sm text-slate-500 mt-1">Use a password you do not use on other sites.</p>
                             </div>
 
                             <form onSubmit={handleChangePassword} className="p-6 sm:p-8 space-y-5">
@@ -359,7 +353,7 @@ export default function SettingsPage() {
                                 <div className="space-y-4 max-w-md">
                                     {/* Field Vector 1: Legacy Existing Key */}
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500">Current Access Password</label>
+                                        <label className="text-sm font-medium text-slate-700">Current password</label>
                                         <div className="relative group">
                                             <Lock size={12} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-700 transition-colors" />
                                             <input
@@ -377,7 +371,7 @@ export default function SettingsPage() {
 
                                     {/* Field Vector 2: New Allocation Variable */}
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500">Target Fresh Password</label>
+                                        <label className="text-sm font-medium text-slate-700">New password</label>
                                         <div className="relative group">
                                             <Lock size={12} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-700 transition-colors" />
                                             <input
@@ -395,7 +389,7 @@ export default function SettingsPage() {
 
                                     {/* Field Vector 3: Validation Comparison Double-Check */}
                                     <div className="space-y-1.5">
-                                        <label className="text-[11px] font-black uppercase tracking-wider text-slate-500">Confirm Fresh Password Mutation</label>
+                                        <label className="text-sm font-medium text-slate-700">Confirm new password</label>
                                         <div className="relative group">
                                             <Lock size={12} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-700 transition-colors" />
                                             <input
@@ -420,12 +414,12 @@ export default function SettingsPage() {
                                         {changingPassword ? (
                                             <>
                                                 <BrandLoader size="xs" />
-                                                <span>Rotating Hash...</span>
+                                                <span>Updating…</span>
                                             </>
                                         ) : (
                                             <>
                                                 <Shield size={12} />
-                                                <span>Commit Password Mutation</span>
+                                                <span>Update password</span>
                                             </>
                                         )}
                                     </button>

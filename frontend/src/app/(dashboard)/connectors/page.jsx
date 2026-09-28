@@ -181,8 +181,8 @@ export default function ConnectorsPage() {
                         <Plug size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Connectors & Plugs</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Configure physical power nozzle interfaces, structural standards, and tariffs</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Connectors</h2>
+                        <p className="text-sm text-slate-500 mt-1">The plugs on each charge point, and whether they are free.</p>
                     </div>
                 </div>
 

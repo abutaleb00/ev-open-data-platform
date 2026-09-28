@@ -77,8 +77,8 @@ export default function SuperAdminUsersPage() {
                         <Users size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Platform Users Control</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Manage operator profiles, account authorizations, and platform roles</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Users</h2>
+                        <p className="text-sm text-slate-500 mt-1">People who can sign in, and the role each one has.</p>
                     </div>
                 </div>
 

@@ -127,7 +127,7 @@ export default function ApiKeysPage() {
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh]">
-                <BrandLoader label="Syncing Secure Credentials Pool" />
+                <BrandLoader label="Loading API keys" />
             </div>
         );
     }
@@ -141,11 +141,11 @@ export default function ApiKeysPage() {
                         <Globe size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black tracking-tight">Developer API Gateway</h2>
-                        <p className="text-xs text-slate-300 font-medium mt-1">
+                        <h2 className="text-2xl font-semibold tracking-tight">API keys</h2>
+                        <p className="text-sm text-slate-300 mt-1">
                             {isSuperAdmin
-                                ? "Master Workspace: Provision and manage roaming data endpoints across all tenants."
-                                : "Expose network roaming endpoints and open data feeds to third-party services."}
+                                ? "Keys that partners use to read or update operator data."
+                                : "Keys your partners use to read your public charging data."}
                         </p>
                     </div>
                 </div>

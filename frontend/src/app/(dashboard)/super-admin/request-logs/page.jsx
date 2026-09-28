@@ -116,8 +116,8 @@ export default function RequestLogsPage() {
                         <Activity size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">API Request Audit Log</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Real-time IP traffic inspection and security access tracking</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Request logs</h2>
+                        <p className="text-sm text-slate-500 mt-1">Calls made to the public feed, including who was blocked.</p>
                     </div>
                 </div>
 

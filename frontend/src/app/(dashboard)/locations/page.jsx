@@ -239,17 +239,17 @@ export default function LocationsPage() {
                         <MapPin size={24} strokeWidth={2.5} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Infrastructure Sites</h2>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">Manage physical station hubs, OCPI parameters, and hardware charge points</p>
+                        <h2 className="text-2xl font-semibold text-slate-950 tracking-tight">Locations</h2>
+                        <p className="text-sm text-slate-500 mt-1">Places where your chargers are installed.</p>
                     </div>
                 </div>
 
                 <button
                     onClick={() => openModal('create')}
-                    className="flex cursor-pointer items-center justify-center space-x-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 text-xs font-black uppercase tracking-wider transition-all shadow-xs active:scale-95"
+                    className="flex cursor-pointer items-center justify-center gap-2 bg-slate-950 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 text-sm font-medium transition-all"
                 >
                     <Plus size={14} strokeWidth={2.5} />
-                    <span>Add Site Location</span>
+                    <span>Add location</span>
                 </button>
             </div>
 
@@ -261,7 +261,7 @@ export default function LocationsPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchString(e.target.value)}
                         className="w-full pl-4 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white text-xs font-semibold focus:outline-none text-slate-800 focus:ring-2 focus:ring-emerald-500/10 placeholder-slate-400"
-                        placeholder="Search location name, operator, UID, city or postcode..."
+                        placeholder="Search by name, city, or postcode"
                     />
                 </div>
                 <div className="w-full sm:w-48">
@@ -271,8 +271,8 @@ export default function LocationsPage() {
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white cursor-pointer"
                     >
                         <option value="">All Statuses</option>
-                        <option value="approved">Broadcast Live</option>
-                        <option value="pending">Pending Approval</option>
+                        <option value="approved">Live on the feed</option>
+                        <option value="pending">Waiting for approval</option>
                     </select>
                 </div>
             </div>
@@ -296,14 +296,14 @@ export default function LocationsPage() {
                             {loading ? (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-16 text-center">
-                                        <BrandLoader label="Loading sites schema" />
+                                        <BrandLoader label="Loading locations" />
                                     </td>
                                 </tr>
                             ) : locations.length === 0 ? (
                                 <tr>
                                     <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
                                         <Building2 size={36} className="mx-auto mb-3 text-slate-300" strokeWidth={1.5} />
-                                        <p className="text-sm font-black text-slate-900">No location sites found</p>
+                                        <p className="text-sm font-medium text-slate-900">No locations yet</p>
                                     </td>
                                 </tr>
                             ) : (
@@ -367,11 +367,11 @@ export default function LocationsPage() {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {loc.isApproved ? (
                                                 <span className="text-emerald-700 border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
-                                                    <CheckCircle2 size={11} className="mr-1" /> Broadcast Live
+                                                    <CheckCircle2 size={11} className="mr-1" /> Live
                                                 </span>
                                             ) : (
                                                 <span className="text-amber-700 border border-amber-200 bg-amber-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
-                                                    <Clock size={11} className="mr-1" /> Pending Approval
+                                                    <Clock size={11} className="mr-1" /> Waiting
                                                 </span>
                                             )}
                                         </td>

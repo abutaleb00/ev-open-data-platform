@@ -45,14 +45,14 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen w-full flex bg-slate-50 relative select-none items-stretch">
+        <div className="min-h-screen w-full flex bg-[#F4F6F8] relative items-stretch">
 
             {/* LEFT PANE: LOGIN PANEL CONTAINER */}
             <div className="w-full lg:w-[45%] flex flex-col justify-between px-6 sm:px-16 lg:px-12 xl:px-24 bg-white relative z-10 py-10 shadow-xl border-r border-slate-200/60">
                 
                 {/* Header Back Button - FIXED PATH REDIRECTION */}
                 <div className="flex items-center justify-between w-full shrink-0">
-                    <Link prefetch={false} href="/" className="inline-flex cursor-pointer items-center space-x-2 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors py-1 group">
+                    <Link prefetch={false} href="/" className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors py-1 group">
                         <ChevronLeft size={14} strokeWidth={2.5} className="transform transition-transform group-hover:-translate-x-0.5" />
                         <span>Return Home</span>
                     </Link>
@@ -61,15 +61,15 @@ export default function LoginPage() {
                         <div className="p-1.5 bg-[#FFAF00] text-slate-950 rounded-lg">
                             <Zap size={14} fill="currentColor" />
                         </div>
-                        <span className="text-xs font-black tracking-widest text-slate-900">EV DATA HUB</span>
+                        <span className="text-sm font-semibold text-slate-900">EV Data Hub</span>
                     </div>
                 </div>
 
                 {/* Core Login Form Matrix */}
                 <div className="w-full max-w-sm mx-auto lg:mx-0 my-auto py-12 space-y-7">
                     <div className="space-y-1.5">
-                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Operator Sign In</h2>
-                        <p className="text-xs text-slate-400 font-bold">Authenticate your terminal workspace matrix variables below.</p>
+                        <h2 className="text-3xl font-semibold text-slate-950 tracking-tight">Sign in</h2>
+                        <p className="text-sm text-slate-500">Use the email and password for your operator account.</p>
                     </div>
 
                     {error && (
@@ -82,14 +82,14 @@ export default function LoginPage() {
                     <form onSubmit={handleLogin} className="space-y-5">
                         {/* Email / Username Input */}
                         <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Email or Username</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
                             <div className="relative group">
-                                <Mail size={14} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-800 transition-colors" />
+                                <Mail size={16} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-800 transition-colors" />
                                 <input
                                     type="text" required
                                     value={email} onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-slate-400 outline-hidden transition-all shadow-3xs"
-                                    placeholder="ops@chargevolt.com or username"
+                                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:border-slate-400 outline-hidden transition-all"
+                                    placeholder="you@company.com"
                                 />
                             </div>
                         </div>
@@ -97,23 +97,24 @@ export default function LoginPage() {
                         {/* Password Input */}
                         <div>
                             <div className="flex justify-between items-center mb-1.5">
-                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Account Access Key</label>
-                                <Link prefetch={false} href="/forgot-password" className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-900 transition-colors">
-                                    Forgot?
+                                <label className="block text-sm font-medium text-slate-700">Password</label>
+                                <Link prefetch={false} href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-900 transition-colors">
+                                    Forgot password?
                                 </Link>
                             </div>
                             <div className="relative group">
-                                <Lock size={14} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-800 transition-colors" />
+                                <Lock size={16} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-slate-800 transition-colors" />
                                 <input
                                     type={showPassword ? 'text' : 'password'} required
                                     value={password} onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-medium text-slate-800 focus:bg-white focus:border-slate-400 outline-hidden transition-all shadow-3xs"
-                                    placeholder="••••••••••••"
+                                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:border-slate-400 outline-hidden transition-all"
+                                    placeholder="Enter your password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
                                     {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                                 </button>
@@ -125,22 +126,29 @@ export default function LoginPage() {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full flex cursor-pointer justify-center items-center py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-md active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
+                                className="w-full flex cursor-pointer justify-center items-center py-3 px-4 rounded-xl text-sm font-semibold text-slate-950 bg-[#F5A524] hover:bg-[#e09a12] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {loading ? (
                                     <>
                                         <BrandLoader size="xs" className="mr-2" />
-                                        <span>Verifying Identity Handshake...</span>
+                                        <span>Signing in…</span>
                                     </>
                                 ) : (
                                     <>
-                                        <span>Secure Core Sign In</span>
+                                        <span>Sign in</span>
                                         <ArrowRight size={14} strokeWidth={2.5} className="ml-2" />
                                     </>
                                 )}
                             </button>
                         </div>
                     </form>
+
+                    <p className="text-sm text-slate-500">
+                        New operator?{' '}
+                        <Link prefetch={false} href="/register" className="font-medium text-slate-900 hover:underline">
+                            Create an account
+                        </Link>
+                    </p>
                 </div>
 
             </div>
@@ -159,32 +167,32 @@ export default function LoginPage() {
                     <div className="p-2.5 bg-gradient-to-br from-amber-400 to-amber-500 rounded-xl text-slate-950 shadow-md">
                         <Zap size={18} strokeWidth={2.5} />
                     </div>
-                    <span className="text-xs font-black tracking-widest text-white uppercase">EV Data Hub Platform</span>
+                    <span className="text-sm font-medium text-white">EV Data Hub</span>
                 </Link>
 
                 {/* Mid Section Banner */}
                 <div className="max-w-xl relative z-10 my-auto space-y-4">
-                    <span className="text-[9px] font-mono font-black tracking-widest text-[#FFAF00] bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 uppercase shadow-2xs">
-                        Authorized Node Access
+                    <span className="text-xs font-medium text-amber-200 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+                        Operator workspace
                     </span>
-                    <h1 className="text-4xl font-black tracking-tight leading-tight mt-2 text-white">
-                        Orchestrate Your <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-emerald-400">Charging Grid Matrix</span>
+                    <h1 className="text-4xl font-semibold tracking-tight leading-tight mt-2 text-white">
+                        Run your network<br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-emerald-300">from one place</span>
                     </h1>
-                    <p className="text-xs text-slate-400 font-bold leading-relaxed max-w-md">
-                        A centralized multi-tenant optimization engine for corporate operators to monitor telemetry coordinates, compile OCPI datasets, and clear active compliance checks in real-time.
+                    <p className="text-sm text-slate-300 leading-relaxed max-w-md">
+                        Add locations and tariffs, watch live sessions, and publish an OCPI feed that maps and roaming partners can use.
                     </p>
                 </div>
 
                 {/* Bottom Core Analytical Specs Deck */}
                 <div className="grid grid-cols-2 gap-8 border-t border-slate-800/80 pt-8 relative z-10 max-w-sm">
                     <div className="space-y-0.5">
-                        <p className="text-2xl font-black text-white">99.98%</p>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Telemetry API Gateway</p>
+                        <p className="text-2xl font-semibold text-white">Live</p>
+                        <p className="text-xs text-slate-400">Public data feed</p>
                     </div>
                     <div className="space-y-0.5">
-                        <p className="text-2xl font-black text-[#73CB44]">OCPI 2.2.1</p>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Native Manifest Pipeline</p>
+                        <p className="text-2xl font-semibold text-[#73CB44]">OCPI 2.2</p>
+                        <p className="text-xs text-slate-400">Built into the data model</p>
                     </div>
                 </div>
             </div>

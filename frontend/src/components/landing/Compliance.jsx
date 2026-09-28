@@ -17,23 +17,23 @@ export default function Compliance() {
                 {/* Left Column Structural Content Area */}
                 <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
                     {/* FIXED: Replaced custom animation string directly with standard inline style manipulation to avoid hash mismatch */}
-                    <div className="inline-flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md border border-slate-800/80 px-3.5 py-1.5 rounded-full text-amber-400 font-bold text-[10px] sm:text-xs tracking-widest uppercase shadow-sm mx-auto lg:mx-0">
+                    <div className="inline-flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-slate-800/80 px-3.5 py-1.5 rounded-full text-amber-300 text-sm mx-auto lg:mx-0">
                         <Shield 
                             size={14} 
                             className="text-emerald-400" 
                             style={{ animation: 'spin 8s linear infinite' }} 
                         />
-                        <span>Industry Standard, Built In</span>
+                        <span>Industry standard, built in</span>
                     </div>
                     
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.15]">
+                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white leading-[1.15]">
                         Speaks the Same <br className="hidden lg:block"/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-300 to-emerald-400">
                             Language as the Industry
                         </span>
                     </h2>
 
-                    <p className="text-xs sm:text-sm text-slate-400 font-medium leading-relaxed max-w-xl mx-auto lg:mx-0">
+                    <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-xl mx-auto lg:mx-0">
                         Built natively on the Open Charge Point Interface (OCPI) standard. Publish once, and appear consistently across maps, EV routing apps, and roaming networks — no bespoke integration per partner.
                     </p>
 

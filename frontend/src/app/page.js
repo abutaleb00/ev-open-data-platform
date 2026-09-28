@@ -20,7 +20,7 @@ export const metadata = {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#FDFDFD] text-slate-900 font-sans selection:bg-[#FFAF00] selection:text-slate-950 scroll-smooth flex flex-col">
+    <div className="min-h-screen bg-[#F7F8FA] text-slate-900 font-sans scroll-smooth flex flex-col">
       <Header />
       <main className="flex-1">
         <Hero />

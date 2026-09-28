@@ -670,11 +670,9 @@ exports.syncOperatorLogin = async (req, res) => {
             success: true,
             message: `Operator login for "${company.name}" synced successfully.`,
             data: {
-                operator_id: company.id,
                 operator_name: company.name,
                 operator_reference_id: company.operatorReferenceId,
                 username: loginIdentifier,
-                user_id: user.id,
                 created
             }
         });

@@ -668,13 +668,7 @@ exports.syncOperatorLogin = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: `Operator login for "${company.name}" synced successfully.`,
-            data: {
-                operator_name: company.name,
-                operator_reference_id: company.operatorReferenceId,
-                username: loginIdentifier,
-                created
-            }
+            message: `Synced: ${company.name}`
         });
 
     } catch (error) {

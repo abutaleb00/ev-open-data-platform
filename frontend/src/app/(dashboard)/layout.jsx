@@ -183,7 +183,7 @@ export default function DashboardLayout({ children }) {
             'companies': 'Operators',
             'users': 'Users',
             'locations': 'Locations',
-            'enrich': 'Enrich locations',
+            'enrich': 'Edit location',
             'charge-points': 'Charge points',
             'connectors': 'Connectors',
             'live': 'Live sessions',

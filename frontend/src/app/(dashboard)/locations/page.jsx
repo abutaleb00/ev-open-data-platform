@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, MapPin, Edit2, Trash2, X, Globe, Eye,
-    AlertCircle, CheckCircle2, Clock, Coffee, AlertTriangle,
+    AlertCircle, CheckCircle2, Clock, Coffee,
     Building2, Navigation, Info, Upload, Image as ImageIcon,
     Zap, ExternalLink, Calendar, Hash, ShieldCheck, Copy, Check
 } from 'lucide-react';
@@ -24,13 +24,11 @@ export default function LocationsPage() {
     const [selectedLoc, setSelectedLoc] = useState(null);
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'media', 'infrastructure'
 
-    // File Handling
+    // File Handling (used by the "Add location" create form only)
     const [selectedFiles, setSelectedFiles] = useState([]);
-    const [existingImages, setExistingImages] = useState([]);
 
     // Feedback Modals
     const [statusModal, setStatusModal] = useState({ show: false, type: 'success', message: '' });
-    const [confirmImageDelete, setConfirmImageDelete] = useState({ show: false, targetId: null });
     const [searchQuery, setSearchString] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [copiedRefId, setCopiedRefId] = useState(null);
@@ -89,58 +87,13 @@ export default function LocationsPage() {
         setSelectedFiles(Array.from(e.target.files));
     };
 
-    const handleRemoveServerImage = async () => {
-        const mediaId = confirmImageDelete.targetId;
-        setConfirmImageDelete({ show: false, targetId: null });
-        try {
-            const response = await api.delete(`/locations/media/${mediaId}`);
-            if (response.data.success) {
-                setExistingImages(prev => prev.filter(img => img.id !== mediaId));
-                fetchData();
-                setStatusModal({
-                    show: true,
-                    type: 'success',
-                    message: 'Media asset unlinked and purged successfully.'
-                });
-            }
-        } catch (error) {
-            setStatusModal({
-                show: true,
-                type: 'error',
-                message: error.response?.data?.message || 'Failed to delete asset.'
-            });
-        }
-    };
-
     const openModal = (mode, loc = null) => {
         setModalMode(mode);
         setSelectedLoc(loc);
         setSelectedFiles([]);
         setActiveTab('overview');
 
-        if (loc && (mode === 'edit' || mode === 'details')) {
-            setExistingImages(loc.images || loc.media || []);
-            if (mode === 'edit') {
-                setFormData({
-                    name: loc.name || '',
-                    address: loc.address || '',
-                    postcode: loc.postcode || '',
-                    latitude: loc.latitude || '',
-                    longitude: loc.longitude || '',
-                    amenities: Array.isArray(loc.amenities) ? loc.amenities.join(', ') : loc.amenities || '',
-                    companyId: loc.companyId || '',
-                    isApproved: loc.isApproved || false,
-                    city: loc.city || '',
-                    state: loc.state || '',
-                    countryCode: loc.countryCode || 'GB',
-                    partyId: loc.partyId || 'CEV',
-                    countryISO: loc.countryISO || 'GBR',
-                    parkingType: loc.parkingType || 'UNKNOWN',
-                    timeZone: loc.timeZone || 'Europe/London'
-                });
-            }
-        } else {
-            setExistingImages([]);
+        if (!loc) {
             setFormData({
                 name: '', address: '', postcode: '', latitude: '', longitude: '', amenities: '',
                 companyId: user?.role === 'SUPER_ADMIN' ? '' : (user?.companyId || ''),
@@ -186,8 +139,6 @@ export default function LocationsPage() {
 
             if (modalMode === 'create') {
                 await api.post('/locations', dataWrapper, config);
-            } else if (modalMode === 'edit') {
-                await api.put(`/locations/${selectedLoc.id}`, dataWrapper, config);
             }
             fetchData();
             closeModal();
@@ -277,127 +228,163 @@ export default function LocationsPage() {
                 </div>
             </div>
 
-            {/* Main Table */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50/70">
-                            <tr>
-                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Site & UID</th>
-                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Location / City</th>
-                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Operator / Host ID</th>
-                                <th scope="col" className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">Media</th>
-                                <th scope="col" className="px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">EVSEs</th>
-                                <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-slate-100">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="7" className="px-6 py-16 text-center">
-                                        <BrandLoader label="Loading locations" />
-                                    </td>
-                                </tr>
-                            ) : locations.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
-                                        <Building2 size={36} className="mx-auto mb-3 text-slate-300" strokeWidth={1.5} />
-                                        <p className="text-sm font-medium text-slate-900">No locations yet</p>
-                                    </td>
-                                </tr>
-                            ) : (
-                                locations.map((loc) => (
-                                    <tr key={loc.id} className="hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-extrabold text-slate-900">{loc.name}</span>
-                                                <div className="flex items-center space-x-2 mt-0.5">
-                                                    <span className="text-[10px] font-mono font-bold text-slate-400">#{loc.locationUid || loc.id}</span>
-                                                    <span className="text-xs font-semibold text-slate-400">{loc.address}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-xs font-extrabold text-slate-700 capitalize">
-                                                {loc.city || '—'} <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">({loc.countryISO})</span>
-                                                <div className="text-[10px] font-mono text-slate-400 font-semibold">{loc.postcode}</div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center text-xs font-extrabold text-slate-800">
-                                                    <Building2 size={13} className="mr-2 text-emerald-600 shrink-0" />
-                                                    {loc.operator?.name || loc.companyName || '—'}
-                                                </div>
-                                                {loc.operatorReferenceId ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleCopyRefId(loc.operatorReferenceId)}
-                                                        title="Copy host reference ID"
-                                                        className="mt-1 inline-flex items-center gap-1.5 w-fit px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 transition-colors cursor-pointer group/copy"
-                                                    >
-                                                        <span className="text-[10px] font-mono font-bold text-slate-500">{loc.operatorReferenceId}</span>
-                                                        {copiedRefId === loc.operatorReferenceId ? (
-                                                            <Check size={10} className="text-emerald-600 shrink-0" />
-                                                        ) : (
-                                                            <Copy size={10} className="text-slate-400 group-hover/copy:text-slate-600 shrink-0" />
-                                                        )}
-                                                    </button>
-                                                ) : (
-                                                    <span className="mt-1 text-[10px] font-semibold text-slate-300 italic">No host ID assigned</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                                            {loc.images && loc.images.length > 0 ? (
-                                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200">
-                                                    <ImageIcon size={11} />
-                                                    <span>{loc.images.length} Photos</span>
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs font-bold text-slate-400 italic">No Media</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                                            <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                                {loc.chargePointsCount ?? loc.chargePoints?.length ?? 0} EVSEs
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {loc.isApproved ? (
-                                                <span className="text-emerald-700 border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
-                                                    <CheckCircle2 size={11} className="mr-1" /> Live
-                                                </span>
-                                            ) : (
-                                                <span className="text-amber-700 border border-amber-200 bg-amber-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
-                                                    <Clock size={11} className="mr-1" /> Waiting
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex items-center justify-end space-x-1">
-                                                <button onClick={() => openModal('details', loc)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="View Full Specs">
-                                                    <Eye size={15} />
-                                                </button>
-                                                <a href={`/locations/enrich?id=${loc.id}`} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="Enrich Data">
-                                                    <Globe size={15} />
-                                                </a>
-                                                <button onClick={() => openModal('edit', loc)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit Site">
-                                                    <Edit2 size={15} />
-                                                </button>
-                                                <button onClick={() => openModal('delete', loc)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Purge Site">
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+            {/* Loading / empty states (shared by both layouts below) */}
+            {loading ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 py-16">
+                    <BrandLoader label="Loading locations" />
                 </div>
-            </div>
+            ) : locations.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 py-16 text-center text-slate-500">
+                    <Building2 size={36} className="mx-auto mb-3 text-slate-300" strokeWidth={1.5} />
+                    <p className="text-sm font-medium text-slate-900">No locations yet</p>
+                </div>
+            ) : (
+                <>
+                    {/* Mobile card list (below md) */}
+                    <div className="md:hidden space-y-3">
+                        {locations.map((loc) => (
+                            <div key={loc.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-extrabold text-slate-900 truncate">{loc.name}</p>
+                                        <p className="text-xs font-semibold text-slate-400 truncate">{loc.address}{loc.city ? `, ${loc.city}` : ''}</p>
+                                        <p className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">#{loc.locationUid || loc.id}</p>
+                                    </div>
+                                    {loc.isApproved ? (
+                                        <span className="shrink-0 text-emerald-700 border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black">
+                                            <CheckCircle2 size={11} className="mr-1" /> Live
+                                        </span>
+                                    ) : (
+                                        <span className="shrink-0 text-amber-700 border border-amber-200 bg-amber-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black">
+                                            <Clock size={11} className="mr-1" /> Waiting
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 border-t border-slate-100 pt-2.5">
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                        <Building2 size={12} className="text-emerald-600 shrink-0" />
+                                        <span className="truncate">{loc.operator?.name || loc.companyName || '—'}</span>
+                                    </span>
+                                    <span className="shrink-0 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600">
+                                        {loc.chargePointsCount ?? loc.chargePoints?.length ?? 0} EVSEs
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                    <button onClick={() => openModal('details', loc)} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-slate-50 border border-slate-200 text-slate-600 cursor-pointer">
+                                        <Eye size={13} /> View
+                                    </button>
+                                    <a href={`/locations/enrich?id=${loc.id}`} className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 border border-emerald-100 text-emerald-700 cursor-pointer">
+                                        <Edit2 size={13} /> Edit
+                                    </a>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop table (md and up) */}
+                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-slate-200">
+                                <thead className="bg-slate-50/70">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Site & UID</th>
+                                        <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Location / City</th>
+                                        <th scope="col" className="hidden xl:table-cell px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Operator / Host ID</th>
+                                        <th scope="col" className="hidden xl:table-cell px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">Media</th>
+                                        <th scope="col" className="hidden lg:table-cell px-6 py-4 text-center text-[11px] font-black text-slate-500 uppercase tracking-wider">EVSEs</th>
+                                        <th scope="col" className="px-6 py-4 text-left text-[11px] font-black text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" className="px-6 py-4 text-right text-[11px] font-black text-slate-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-slate-100">
+                                    {locations.map((loc) => (
+                                        <tr key={loc.id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-extrabold text-slate-900">{loc.name}</span>
+                                                    <div className="flex items-center space-x-2 mt-0.5">
+                                                        <span className="text-[10px] font-mono font-bold text-slate-400">#{loc.locationUid || loc.id}</span>
+                                                        <span className="text-xs font-semibold text-slate-400">{loc.address}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-xs font-extrabold text-slate-700 capitalize">
+                                                    {loc.city || '—'} <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">({loc.countryISO})</span>
+                                                    <div className="text-[10px] font-mono text-slate-400 font-semibold">{loc.postcode}</div>
+                                                </div>
+                                            </td>
+                                            <td className="hidden xl:table-cell px-6 py-4 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center text-xs font-extrabold text-slate-800">
+                                                        <Building2 size={13} className="mr-2 text-emerald-600 shrink-0" />
+                                                        {loc.operator?.name || loc.companyName || '—'}
+                                                    </div>
+                                                    {loc.operatorReferenceId ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopyRefId(loc.operatorReferenceId)}
+                                                            title="Copy host reference ID"
+                                                            className="mt-1 inline-flex items-center gap-1.5 w-fit px-1.5 py-0.5 rounded-md bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 transition-colors cursor-pointer group/copy"
+                                                        >
+                                                            <span className="text-[10px] font-mono font-bold text-slate-500">{loc.operatorReferenceId}</span>
+                                                            {copiedRefId === loc.operatorReferenceId ? (
+                                                                <Check size={10} className="text-emerald-600 shrink-0" />
+                                                            ) : (
+                                                                <Copy size={10} className="text-slate-400 group-hover/copy:text-slate-600 shrink-0" />
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="mt-1 text-[10px] font-semibold text-slate-300 italic">No host ID assigned</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="hidden xl:table-cell px-6 py-4 whitespace-nowrap text-center">
+                                                {loc.images && loc.images.length > 0 ? (
+                                                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200">
+                                                        <ImageIcon size={11} />
+                                                        <span>{loc.images.length} Photos</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-400 italic">No Media</span>
+                                                )}
+                                            </td>
+                                            <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-center">
+                                                <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                                    {loc.chargePointsCount ?? loc.chargePoints?.length ?? 0} EVSEs
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {loc.isApproved ? (
+                                                    <span className="text-emerald-700 border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
+                                                        <CheckCircle2 size={11} className="mr-1" /> Live
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-amber-700 border border-amber-200 bg-amber-50 px-2.5 py-0.5 rounded-full flex items-center text-[10px] font-black w-max">
+                                                        <Clock size={11} className="mr-1" /> Waiting
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <div className="flex items-center justify-end space-x-1">
+                                                    <button onClick={() => openModal('details', loc)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer" title="View details">
+                                                        <Eye size={15} />
+                                                    </button>
+                                                    <a href={`/locations/enrich?id=${loc.id}`} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Edit">
+                                                        <Edit2 size={15} />
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Modals Container */}
             {modalMode && (
@@ -408,10 +395,9 @@ export default function LocationsPage() {
 
                         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                                {modalMode === 'create' && 'Register New OCPI Location'}
-                                {modalMode === 'edit' && 'Modify Compliance Scope'}
-                                {modalMode === 'details' && 'Site Audit & OCPI Metadata'}
-                                {modalMode === 'delete' && 'Confirm Erasure Protocol'}
+                                {modalMode === 'create' && 'Add new location'}
+                                {modalMode === 'details' && 'View details'}
+                                {modalMode === 'delete' && 'Delete location'}
                             </h3>
                             <button onClick={closeModal} className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1 rounded-lg transition-colors cursor-pointer">
                                 <X size={16} strokeWidth={2.5} />
@@ -537,16 +523,30 @@ export default function LocationsPage() {
                                     </div>
                                 )}
 
-                                <div className="pt-4 border-t border-slate-100 flex justify-end">
-                                    <button onClick={closeModal} className="px-5 py-2 bg-slate-900 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-800 cursor-pointer">
-                                        Close Specs
-                                    </button>
+                                <div className="pt-4 border-t border-slate-100 space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <a href={`/locations/enrich?id=${selectedLoc.id}`} className="text-xs font-bold text-amber-700 hover:text-amber-800 cursor-pointer inline-flex items-center gap-1.5">
+                                            <Edit2 size={13} /> Edit this location →
+                                        </a>
+                                        <button onClick={closeModal} className="px-5 py-2 bg-slate-900 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-slate-800 cursor-pointer">
+                                            Close
+                                        </button>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => openModal('delete', selectedLoc)}
+                                            className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 cursor-pointer transition-colors"
+                                        >
+                                            Delete this location
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Form Area (Create / Edit) */}
-                        {(modalMode === 'create' || modalMode === 'edit') && (
+                        {/* Form Area (Create) */}
+                        {modalMode === 'create' && (
                             <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -609,33 +609,10 @@ export default function LocationsPage() {
                                     </div>
                                 </div>
 
-                                {/* Server Images Gallery Editor */}
-                                {modalMode === 'edit' && existingImages.length > 0 && (
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
-                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                            <ImageIcon size={13} className="mr-1 text-amber-500 shrink-0" /> Synchronized File Assets
-                                        </label>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {existingImages.map((img) => (
-                                                <div key={img.id} className="relative aspect-video rounded-xl border border-slate-200 overflow-hidden bg-slate-100 group shadow-2xs">
-                                                    <img src={img.url} alt="Site asset" className="w-full h-full object-cover" />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setConfirmImageDelete({ show: true, targetId: img.id })}
-                                                        className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 cursor-pointer"
-                                                    >
-                                                        <Trash2 size={16} className="text-rose-400 hover:scale-110 transition-transform" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Upload Control */}
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                                     <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center">
-                                        <Upload size={13} className="mr-1.5 text-emerald-600 shrink-0" /> {modalMode === 'edit' ? 'Append New Images' : 'Site Physical Images'}
+                                        <Upload size={13} className="mr-1.5 text-emerald-600 shrink-0" /> Site Physical Images
                                     </label>
                                     <input
                                         type="file"
@@ -709,31 +686,6 @@ export default function LocationsPage() {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Amenities Tags</label>
-                                    <input
-                                        type="text"
-                                        value={formData.amenities}
-                                        onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-slate-400 outline-none transition-all"
-                                        placeholder="Restrooms, Cafe, 24/7 Access"
-                                    />
-                                </div>
-
-                                {modalMode === 'edit' && user?.role === 'SUPER_ADMIN' && (
-                                    <div className="pt-2">
-                                        <label className="flex items-center space-x-3 cursor-pointer group w-fit">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.isApproved}
-                                                onChange={(e) => setFormData({ ...formData, isApproved: e.target.checked })}
-                                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                                            />
-                                            <span className="text-xs font-black text-slate-700 uppercase tracking-wide select-none">Publish configuration straight to public Open Data networks</span>
-                                        </label>
-                                    </div>
-                                )}
-
                                 <div className="flex space-x-3 pt-4 border-t border-slate-100 mt-6">
                                     <button type="button" onClick={closeModal} className="flex-1 py-2 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">
                                         Cancel
@@ -772,41 +724,6 @@ export default function LocationsPage() {
                 </div>
             )}
 
-            {/* Image Delete Confirm Overlay */}
-            {confirmImageDelete.show && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-                    <div className="fixed inset-0 bg-slate-950/40" onClick={() => setConfirmImageDelete({ show: false, targetId: null })}></div>
-                    <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-5 animate-in zoom-in-95 duration-150">
-                        <div className="flex items-start space-x-4">
-                            <div className="p-3 bg-amber-50 rounded-xl text-amber-600 shrink-0">
-                                <AlertTriangle size={20} />
-                            </div>
-                            <div className="space-y-1">
-                                <h4 className="text-base font-extrabold text-slate-900">Purge Server Disk Image?</h4>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                                    This will remove the selected image reference permanently from the database and disk storage.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                            <button
-                                type="button"
-                                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
-                                onClick={() => setConfirmImageDelete({ show: false, targetId: null })}
-                            >
-                                Retain Asset
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleRemoveServerImage}
-                                className="flex-1 px-4 py-2.5 bg-rose-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-rose-700 transition-colors shadow-sm cursor-pointer"
-                            >
-                                Confirm Purge
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Notification Toast */}
             {statusModal.show && (

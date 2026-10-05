@@ -3,8 +3,9 @@ const prisma = new PrismaClient();
 const crypto = require('crypto');
 const { hashApiKey, encryptApiKey, decryptApiKey } = require('../utils/apiKeyHash');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
-const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
+const { pruneOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 const { touchCompany } = require('../utils/touchCompany');
+const { applyIfProvided } = require('../utils/protectedFieldMerge');
 
 const getClientIp = (req) => {
     const forwardedFor = req.headers['x-forwarded-for'];
@@ -842,13 +843,17 @@ exports.ingestExternalData = async (req, res) => {
 
         const companyId = resolution.company.id;
 
-        // Each ingest call is treated as this operator's complete current state:
-        // wipe its existing Locations/ChargePoints/Connectors (and their Sessions/
-        // Media) first, then rebuild entirely fresh from this payload below.
-        await wipeOperatorInfrastructure(companyId);
-
+        // Each ingest call is treated as this operator's complete current state, but (like
+        // syncOperatorData) host-entered enrichment from /locations/enrich must survive a
+        // call that doesn't mention those fields - so rows are upserted in place rather than
+        // wiped-then-rebuilt, protected fields only overwrite on a real non-null value (see
+        // applyIfProvided), and anything this payload didn't reference is pruned once at the
+        // end via pruneOperatorInfrastructure (same session-protection guarantee as before).
         const skippedIds = [];
         let processedCount = 0;
+        const keptLocationIds = [];
+        const keptChargePointIdsByLocation = {};
+        const keptConnectorIdsByChargePoint = {};
 
         for (const loc of locations) {
             // Location IDs are partner-controlled and OCPI-shaped (GUIDs, not necessarily
@@ -865,6 +870,13 @@ exports.ingestExternalData = async (req, res) => {
                 continue;
             }
 
+            const protectedLocationFields = {};
+            const facilitiesRaw = loc.facilities !== undefined ? loc.facilities : loc.amenities;
+            applyIfProvided(protectedLocationFields, 'amenities', facilitiesRaw, (v) => Array.isArray(v) ? v.join(', ') : v);
+            applyIfProvided(protectedLocationFields, 'directions', loc.directions, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+            applyIfProvided(protectedLocationFields, 'relatedLocations', loc.related_locations, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+            applyIfProvided(protectedLocationFields, 'energyMix', loc.energy_mix, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+
             const savedLocation = await prisma.location.upsert({
                 where: { companyId_locationUid: { companyId, locationUid: externalLocId } },
                 update: {
@@ -878,7 +890,8 @@ exports.ingestExternalData = async (req, res) => {
                     countryCode: loc.country_code || "GB",
                     countryISO: loc.country || "GBR",
                     publish: loc.publish ?? true,
-                    companyId: companyId
+                    companyId: companyId,
+                    ...protectedLocationFields
                 },
                 create: {
                     locationUid: externalLocId,
@@ -893,11 +906,35 @@ exports.ingestExternalData = async (req, res) => {
                     countryISO: loc.country || "GBR",
                     publish: loc.publish ?? true,
                     companyId: companyId,
-                    isApproved: true
+                    isApproved: true,
+                    ...protectedLocationFields
                 }
             });
 
             processedCount++;
+            keptLocationIds.push(savedLocation.id);
+            keptChargePointIdsByLocation[savedLocation.id] = [];
+
+            // Location gallery images - see syncOperatorData for the same SYNC_IMPORTED
+            // tagging rationale: only touched on a real non-null images array, and only
+            // replaces rows this ingest pipeline previously created, never host uploads.
+            if (loc.images !== undefined && loc.images !== null) {
+                await prisma.media.deleteMany({ where: { locationId: savedLocation.id, category: 'SYNC_IMPORTED' } });
+
+                const syncedImages = Array.isArray(loc.images) ? loc.images : [];
+                const mediaRows = syncedImages
+                    .map((img) => ({
+                        url: typeof img === 'string' ? img : img?.url,
+                        type: (img && img.type) || 'image/jpeg',
+                        category: 'SYNC_IMPORTED',
+                        locationId: savedLocation.id
+                    }))
+                    .filter((m) => m.url);
+
+                if (mediaRows.length > 0) {
+                    await prisma.media.createMany({ data: mediaRows });
+                }
+            }
 
             if (loc.evses && Array.isArray(loc.evses)) {
                 for (const evse of loc.evses) {
@@ -916,12 +953,19 @@ exports.ingestExternalData = async (req, res) => {
                         continue;
                     }
 
+                    const protectedEvseFields = {};
+                    applyIfProvided(protectedEvseFields, 'floorLevel', evse.floor_level);
+                    applyIfProvided(protectedEvseFields, 'directions', evse.directions, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+                    applyIfProvided(protectedEvseFields, 'parkingRestrictions', evse.parking_restrictions, (v) => Array.isArray(v) ? v.join(',') : v);
+                    applyIfProvided(protectedEvseFields, 'evseImages', evse.images, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+
                     const savedChargePoint = await prisma.chargePoint.upsert({
                         where: { hardwareId: String(hardwareIdVal) },
                         update: {
                             evseUid: evse.uid ? String(evse.uid) : null,
                             status: (evse.status || "UNKNOWN").toUpperCase(),
-                            locationId: savedLocation.id
+                            locationId: savedLocation.id,
+                            ...protectedEvseFields
                         },
                         create: {
                             hardwareId: String(hardwareIdVal),
@@ -929,15 +973,19 @@ exports.ingestExternalData = async (req, res) => {
                             status: (evse.status || "UNKNOWN").toUpperCase(),
                             locationId: savedLocation.id,
                             isApproved: true,
-                            capabilities: evse.capabilities && Array.isArray(evse.capabilities) ? evse.capabilities.join(',') : "REMOTE_START_STOP_CAPABLE"
+                            capabilities: evse.capabilities && Array.isArray(evse.capabilities) ? evse.capabilities.join(',') : "REMOTE_START_STOP_CAPABLE",
+                            ...protectedEvseFields
                         }
                     });
 
+                    keptChargePointIdsByLocation[savedLocation.id].push(savedChargePoint.id);
+                    keptConnectorIdsByChargePoint[savedChargePoint.id] = [];
+
                     if (evse.connectors && Array.isArray(evse.connectors)) {
-                        // Match-and-update rather than delete-then-recreate: a connector
-                        // surviving wipeOperatorInfrastructure above did so because it has
-                        // real Session history, so it must be updated in place (preserving
-                        // its id) rather than replaced, if the payload still reports it.
+                        // Match-and-update rather than delete-then-recreate: a connector with
+                        // real Session history must be updated in place (preserving its id)
+                        // rather than replaced, if the payload still reports it - enforced by
+                        // pruneOperatorInfrastructure below, not by this loop.
                         for (const conn of evse.connectors) {
                             const parsedPowerKw = conn.max_electric_power ? parseFloat(conn.max_electric_power) / 1000 : 7.4;
                             const connUid = conn.id ? String(conn.id) : null;
@@ -955,20 +1003,30 @@ exports.ingestExternalData = async (req, res) => {
                                 amperage: parseInt(conn.max_amperage, 10) || 32
                             };
 
-                            const existingConnector = connUid
+                            let savedConnector = connUid
                                 ? await prisma.connector.findFirst({ where: { chargePointId: savedChargePoint.id, connectorUid: connUid } })
                                 : null;
 
-                            if (existingConnector) {
-                                await prisma.connector.update({ where: { id: existingConnector.id }, data: connData });
+                            if (savedConnector) {
+                                savedConnector = await prisma.connector.update({ where: { id: savedConnector.id }, data: connData });
                             } else {
-                                await prisma.connector.create({ data: connData });
+                                savedConnector = await prisma.connector.create({ data: connData });
                             }
+
+                            keptConnectorIdsByChargePoint[savedChargePoint.id].push(savedConnector.id);
                         }
                     }
                 }
             }
         }
+
+        // Anything belonging to this company that this payload didn't reference is now
+        // genuinely stale - remove it (still never touching a Connector with real Sessions).
+        await pruneOperatorInfrastructure(companyId, {
+            keptLocationIds,
+            keptChargePointIdsByLocation,
+            keptConnectorIdsByChargePoint
+        });
 
         await touchCompany(companyId);
 
@@ -1022,8 +1080,35 @@ exports.updateLocationMetadata = async (req, res) => {
             energyMix,
             amenities,
             images,
-            evses
+            evses,
+            // Core registration fields - merged in here so the host-facing editor at
+            // /locations/enrich is the single place to edit a location (no separate
+            // "Edit core details" modal). companyId/isApproved stay Super Admin-only,
+            // matching locationController.updateLocation's moderation rules.
+            name,
+            address,
+            postcode,
+            city,
+            state,
+            countryCode,
+            partyId,
+            countryISO,
+            companyId,
+            isApproved
         } = req.body;
+
+        if (latitude !== undefined || longitude !== undefined) {
+            const parsedLat = latitude !== undefined ? parseFloat(latitude) : existingLocation.latitude;
+            const parsedLng = longitude !== undefined ? parseFloat(longitude) : existingLocation.longitude;
+            if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90 || isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Latitude (-90 to 90) or Longitude (-180 to 180) values fall outside valid global coordinates."
+                });
+            }
+        }
+
+        const isSuperAdmin = req.user.role === 'SUPER_ADMIN';
 
         await prisma.$transaction(async (tx) => {
             await tx.location.update({
@@ -1043,9 +1128,27 @@ exports.updateLocationMetadata = async (req, res) => {
                     amenities: amenities !== undefined ? amenities : existingLocation.amenities,
                     energyMix: energyMix !== undefined ? JSON.stringify(energyMix) : existingLocation.energyMix,
 
+                    name: name !== undefined ? name : existingLocation.name,
+                    address: address !== undefined ? address : existingLocation.address,
+                    postcode: postcode !== undefined ? postcode : existingLocation.postcode,
+                    city: city !== undefined ? city : existingLocation.city,
+                    state: state !== undefined ? state : existingLocation.state,
+                    countryCode: countryCode !== undefined ? countryCode : existingLocation.countryCode,
+                    partyId: partyId !== undefined ? partyId : existingLocation.partyId,
+                    countryISO: countryISO !== undefined ? countryISO : existingLocation.countryISO,
+                    // Moderation approval and operator reassignment are Super Admin-only -
+                    // a company's own admins must not self-approve or move their own site
+                    // to a different operator (see locationController.updateLocation).
+                    ...(isSuperAdmin && companyId !== undefined && { companyId: parseInt(companyId, 10) }),
+                    ...(isSuperAdmin && isApproved !== undefined && { isApproved: Boolean(isApproved) }),
+
+                    // Only replaces the host's own gallery rows - never the 'SYNC_IMPORTED'
+                    // rows a partner sync/ingest call created (see operatorSyncController /
+                    // ingestExternalData), so a host save here can't clobber partner-synced
+                    // photos out from under the next sync's SYNC_IMPORTED-scoped delete.
                     ...(images !== undefined && {
                         media: {
-                            deleteMany: {},
+                            deleteMany: { category: { not: 'SYNC_IMPORTED' } },
                             create: images.map(img => ({ url: typeof img === 'string' ? img : img.url, type: 'OTHER' }))
                         }
                     })
@@ -1119,8 +1222,12 @@ exports.patchExternalLocation = async (req, res) => {
         const {
             directions,
             relatedLocations,
+            related_locations,
             publishAllowedTo,
             energyMix,
+            energy_mix,
+            facilities,
+            amenities,
             latitude,
             longitude,
             ...otherFields
@@ -1128,27 +1235,24 @@ exports.patchExternalLocation = async (req, res) => {
 
         const updateData = { ...otherFields };
 
-        if (directions !== undefined) {
-            if (Array.isArray(directions)) {
-                updateData.directions = directions.length > 0 ? (directions[0].text || JSON.stringify(directions)) : null;
-            } else if (typeof directions === 'object' && directions !== null) {
-                updateData.directions = directions.text || JSON.stringify(directions);
-            } else {
-                updateData.directions = directions;
-            }
-        }
+        // directions/relatedLocations/energyMix/facilities are host-editable via
+        // /locations/enrich - a partner payload that omits one, or sends it as explicit
+        // `null`, must preserve whatever the host (or a prior sync) already set, not
+        // clobber it. Only a real non-null value overwrites - see applyIfProvided.
+        applyIfProvided(updateData, 'directions', directions, (v) => {
+            if (Array.isArray(v)) return v.length > 0 ? (v[0].text || JSON.stringify(v)) : null;
+            if (typeof v === 'object') return v.text || JSON.stringify(v);
+            return v;
+        });
 
-        if (relatedLocations !== undefined) {
-            updateData.relatedLocations = typeof relatedLocations === 'object' ? JSON.stringify(relatedLocations) : relatedLocations;
-        }
+        applyIfProvided(updateData, 'relatedLocations', relatedLocations !== undefined ? relatedLocations : related_locations, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
 
         if (publishAllowedTo !== undefined) {
             updateData.publishAllowedTo = typeof publishAllowedTo === 'object' ? JSON.stringify(publishAllowedTo) : publishAllowedTo;
         }
 
-        if (energyMix !== undefined) {
-            updateData.energyMix = typeof energyMix === 'object' ? JSON.stringify(energyMix) : energyMix;
-        }
+        applyIfProvided(updateData, 'energyMix', energyMix !== undefined ? energyMix : energy_mix, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+        applyIfProvided(updateData, 'amenities', facilities !== undefined ? facilities : amenities, (v) => Array.isArray(v) ? v.join(', ') : v);
 
         if (latitude !== undefined) updateData.latitude = parseFloat(latitude);
         if (longitude !== undefined) updateData.longitude = parseFloat(longitude);
@@ -1226,9 +1330,11 @@ exports.patchExternalEvse = async (req, res) => {
         }
 
         if (status !== undefined) evseUpdateData.status = status;
-        if (floor_level !== undefined || floorLevel !== undefined) {
-            evseUpdateData.floorLevel = floor_level !== undefined ? floor_level : floorLevel;
-        }
+
+        // floor_level/parking_restrictions/directions/images are host-editable via
+        // /locations/enrich - omitted or explicit `null` in a partner payload must
+        // preserve the existing value rather than clobber it (see applyIfProvided).
+        applyIfProvided(evseUpdateData, 'floorLevel', floor_level !== undefined ? floor_level : floorLevel);
 
         if (capabilities !== undefined) {
             evseUpdateData.capabilities = Array.isArray(capabilities) ? capabilities.join(',') : capabilities;
@@ -1239,29 +1345,25 @@ exports.patchExternalEvse = async (req, res) => {
             evseUpdateData.statusSchedule = typeof rawSchedule === 'object' ? JSON.stringify(rawSchedule) : rawSchedule;
         }
 
-        if (parking_restrictions !== undefined || parkingRestrictions !== undefined) {
-            const rawRestrictions = parking_restrictions !== undefined ? parking_restrictions : parkingRestrictions;
-            evseUpdateData.parkingRestrictions = Array.isArray(rawRestrictions) ? rawRestrictions.join(',') : rawRestrictions;
-        }
+        applyIfProvided(
+            evseUpdateData,
+            'parkingRestrictions',
+            parking_restrictions !== undefined ? parking_restrictions : parkingRestrictions,
+            (v) => Array.isArray(v) ? v.join(',') : v
+        );
 
-        if (directions !== undefined) {
-            if (Array.isArray(directions)) {
-                evseUpdateData.directions = directions.length > 0 ? (directions[0].text || JSON.stringify(directions)) : null;
-            } else if (typeof directions === 'object' && directions !== null) {
-                evseUpdateData.directions = directions.text || JSON.stringify(directions);
-            } else {
-                evseUpdateData.directions = directions;
-            }
-        }
+        applyIfProvided(evseUpdateData, 'directions', directions, (v) => {
+            if (Array.isArray(v)) return v.length > 0 ? (v[0].text || JSON.stringify(v)) : null;
+            if (typeof v === 'object') return v.text || JSON.stringify(v);
+            return v;
+        });
 
         if (coordinates && typeof coordinates === 'object') {
             if (coordinates.latitude !== undefined) evseUpdateData.evseLatitude = parseFloat(coordinates.latitude);
             if (coordinates.longitude !== undefined) evseUpdateData.evseLongitude = parseFloat(coordinates.longitude);
         }
 
-        if (images !== undefined) {
-            evseUpdateData.evseImages = typeof images === 'object' ? JSON.stringify(images) : images;
-        }
+        applyIfProvided(evseUpdateData, 'evseImages', images, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
 
         await prisma.chargePoint.update({
             where: { id: existingEvse.id },

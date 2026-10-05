@@ -3,9 +3,10 @@ const prisma = new PrismaClient();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { resolveOperatorCompany } = require('../utils/resolveOperatorCompany');
-const { wipeOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
+const { pruneOperatorInfrastructure } = require('../utils/wipeOperatorInfrastructure');
 const { touchCompany } = require('../utils/touchCompany');
 const { extractEnergyPrice } = require('../utils/ocpiTariff');
+const { applyIfProvided } = require('../utils/protectedFieldMerge');
 
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
@@ -108,16 +109,19 @@ exports.syncOperatorData = async (req, res) => {
             }
         }
 
-        // Each sync call is treated as this operator's complete current state:
-        // wipe its existing Locations/ChargePoints/Connectors (and their Sessions/
-        // Media) first, then rebuild entirely fresh from this payload below.
-        await wipeOperatorInfrastructure(company.id);
-
-        // ======================================================
-        // RECURSIVE SYNC FOR LOCATIONS, EVSEs, CONNECTORS
-        // (all scoped to this company - see note above)
-        // ======================================================
+        // Each sync call is treated as this operator's complete current state, but
+        // host-entered enrichment (directions/related_locations/facilities/energy_mix at
+        // the Location level; floor_level/directions/parking_restrictions/images per EVSE -
+        // see /locations/enrich) must survive a sync that doesn't mention those fields.
+        // So rather than wiping everything upfront and rebuilding fresh, every Location/
+        // ChargePoint/Connector below is upserted in place (protected fields only applied
+        // when the payload actually provides a non-null value - see applyIfProvided), and
+        // anything this payload DIDN'T reference gets pruned once at the end via
+        // pruneOperatorInfrastructure (same session-protection guarantee wipe used to give).
         const locationsSynced = [];
+        const keptLocationIds = [];
+        const keptChargePointIdsByLocation = {};
+        const keptConnectorIdsByChargePoint = {};
 
         for (const locPayload of locationsToSync) {
             const locUid = (locPayload.id !== undefined && locPayload.id !== null && String(locPayload.id).trim() !== '')
@@ -149,7 +153,6 @@ exports.syncOperatorData = async (req, res) => {
                 companyId: company.id,
                 parkingType: locPayload.parking_type || "UNKNOWN",
                 timeZone: locPayload.time_zone || "Europe/London",
-                amenities: Array.isArray(locPayload.facilities) ? locPayload.facilities.join(', ') : locPayload.amenities || '',
                 isApproved: true,
                 locationUid: locUid,
                 operatorReferenceId: company.operatorReferenceId,
@@ -158,6 +161,15 @@ exports.syncOperatorData = async (req, res) => {
                 ownerData: locPayload.owner ? JSON.stringify(locPayload.owner) : null,
                 openingTimesData: locPayload.opening_times ? JSON.stringify(locPayload.opening_times) : null
             };
+
+            // Host-editable fields (see /locations/enrich) - only overwritten when this
+            // payload actually supplies a non-null value, otherwise the host's prior edit
+            // (or a previous sync's value) survives untouched.
+            const facilitiesRaw = locPayload.facilities !== undefined ? locPayload.facilities : locPayload.amenities;
+            applyIfProvided(locationData, 'amenities', facilitiesRaw, (v) => Array.isArray(v) ? v.join(', ') : v);
+            applyIfProvided(locationData, 'directions', locPayload.directions, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+            applyIfProvided(locationData, 'relatedLocations', locPayload.related_locations, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+            applyIfProvided(locationData, 'energyMix', locPayload.energy_mix, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
 
             if (location) {
                 location = await prisma.location.update({
@@ -168,6 +180,33 @@ exports.syncOperatorData = async (req, res) => {
                 location = await prisma.location.create({
                     data: locationData
                 });
+            }
+
+            keptLocationIds.push(location.id);
+            keptChargePointIdsByLocation[location.id] = [];
+
+            // Location gallery images (OCPI 'images', stored as Media rows - see
+            // locationController.getAllLocations) only get touched when this payload
+            // actually provides a non-null images array, and only the rows THIS sync
+            // previously created (category 'SYNC_IMPORTED') are replaced - any host-
+            // uploaded Media (any other category, from /locations or /locations/enrich)
+            // is never touched here.
+            if (locPayload.images !== undefined && locPayload.images !== null) {
+                await prisma.media.deleteMany({ where: { locationId: location.id, category: 'SYNC_IMPORTED' } });
+
+                const syncedImages = Array.isArray(locPayload.images) ? locPayload.images : [];
+                const mediaRows = syncedImages
+                    .map((img) => ({
+                        url: typeof img === 'string' ? img : img?.url,
+                        type: (img && img.type) || 'image/jpeg',
+                        category: 'SYNC_IMPORTED',
+                        locationId: location.id
+                    }))
+                    .filter((m) => m.url);
+
+                if (mediaRows.length > 0) {
+                    await prisma.media.createMany({ data: mediaRows });
+                }
             }
 
             // Sync EVSEs
@@ -194,13 +233,18 @@ exports.syncOperatorData = async (req, res) => {
                     evseUid: evsePayload.uid || hardwareId,
                     locationId: location.id,
                     status: (evsePayload.status || "AVAILABLE").toUpperCase(),
-                    floorLevel: evsePayload.floor_level || null,
                     physicalReference: evsePayload.physical_reference || null,
-                    parkingRestrictions: Array.isArray(evsePayload.parking_restrictions) ? evsePayload.parking_restrictions.join(',') : null,
                     capabilities: Array.isArray(evsePayload.capabilities) ? evsePayload.capabilities.join(',') : 'REMOTE_START_STOP_CAPABLE',
-                    evseImages: evsePayload.images ? JSON.stringify(evsePayload.images) : null,
                     isApproved: true
                 };
+
+                // Host-editable fields (see /locations/enrich) - preserved unless this
+                // payload supplies a real, non-null value - same rule as the Location
+                // fields above.
+                applyIfProvided(cpData, 'floorLevel', evsePayload.floor_level);
+                applyIfProvided(cpData, 'directions', evsePayload.directions, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
+                applyIfProvided(cpData, 'parkingRestrictions', evsePayload.parking_restrictions, (v) => Array.isArray(v) ? v.join(',') : v);
+                applyIfProvided(cpData, 'evseImages', evsePayload.images, (v) => typeof v === 'object' ? JSON.stringify(v) : v);
 
                 if (chargePoint) {
                     chargePoint = await prisma.chargePoint.update({
@@ -218,6 +262,9 @@ exports.syncOperatorData = async (req, res) => {
                         data: cpData
                     });
                 }
+
+                keptChargePointIdsByLocation[location.id].push(chargePoint.id);
+                keptConnectorIdsByChargePoint[chargePoint.id] = [];
 
                 // Sync Connectors
                 const connectorsToSync = Array.isArray(evsePayload.connectors) ? evsePayload.connectors : [];
@@ -255,20 +302,30 @@ exports.syncOperatorData = async (req, res) => {
                     };
 
                     if (connector) {
-                        await prisma.connector.update({
+                        connector = await prisma.connector.update({
                             where: { id: connector.id },
                             data: connData
                         });
                     } else {
-                        await prisma.connector.create({
+                        connector = await prisma.connector.create({
                             data: connData
                         });
                     }
+
+                    keptConnectorIdsByChargePoint[chargePoint.id].push(connector.id);
                 }
             }
 
             locationsSynced.push(location.locationUid);
         }
+
+        // Anything belonging to this company that this payload didn't reference is now
+        // genuinely stale - remove it (still never touching a Connector with real Sessions).
+        await pruneOperatorInfrastructure(company.id, {
+            keptLocationIds,
+            keptChargePointIdsByLocation,
+            keptConnectorIdsByChargePoint
+        });
 
         await touchCompany(company.id);
 

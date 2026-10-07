@@ -1110,32 +1110,40 @@ exports.updateLocationMetadata = async (req, res) => {
 
         const isSuperAdmin = req.user.role === 'SUPER_ADMIN';
 
+        // Non-Super-Admin hosts may only edit the OCPI "content" fields below -
+        // facilities/directions/related_locations/energy_mix/images at the Location
+        // level, and floor_level/directions/parking_restrictions/images per EVSE.
+        // Core registration fields (name/address/coordinates/party ID/etc.),
+        // publish/publish_allowed_to, parking_type, suboperator info, and per-EVSE
+        // lat/lng overrides are Super-Admin-only from this endpoint - a host's
+        // payload for those is ignored outright rather than merely hidden in the UI.
         await prisma.$transaction(async (tx) => {
             await tx.location.update({
                 where: { id: locationId },
                 data: {
-                    publish: publish ?? existingLocation.publish,
-                    publishAllowedTo: publishAllowedTo !== undefined ? JSON.stringify(publishAllowedTo) : existingLocation.publishAllowedTo,
-                    latitude: latitude !== undefined ? parseFloat(latitude) : existingLocation.latitude,
-                    longitude: longitude !== undefined ? parseFloat(longitude) : existingLocation.longitude,
                     relatedLocations: relatedLocations !== undefined ? JSON.stringify(relatedLocations) : existingLocation.relatedLocations,
-                    parkingType: parkingType !== undefined ? parkingType : existingLocation.parkingType,
                     directions: directions !== undefined ? directions : existingLocation.directions,
-                    suboperatorName: suboperatorName !== undefined ? suboperatorName : existingLocation.suboperatorName,
-                    suboperatorWebsite: suboperatorWebsite !== undefined ? suboperatorWebsite : existingLocation.suboperatorWebsite,
-                    suboperatorLogoUrl: suboperatorLogoUrl !== undefined ? suboperatorLogoUrl : existingLocation.suboperatorLogoUrl,
-                    chargingWhenClosed: chargingWhenClosed ?? existingLocation.chargingWhenClosed,
                     amenities: amenities !== undefined ? amenities : existingLocation.amenities,
                     energyMix: energyMix !== undefined ? JSON.stringify(energyMix) : existingLocation.energyMix,
 
-                    name: name !== undefined ? name : existingLocation.name,
-                    address: address !== undefined ? address : existingLocation.address,
-                    postcode: postcode !== undefined ? postcode : existingLocation.postcode,
-                    city: city !== undefined ? city : existingLocation.city,
-                    state: state !== undefined ? state : existingLocation.state,
-                    countryCode: countryCode !== undefined ? countryCode : existingLocation.countryCode,
-                    partyId: partyId !== undefined ? partyId : existingLocation.partyId,
-                    countryISO: countryISO !== undefined ? countryISO : existingLocation.countryISO,
+                    publish: isSuperAdmin ? (publish ?? existingLocation.publish) : existingLocation.publish,
+                    publishAllowedTo: isSuperAdmin && publishAllowedTo !== undefined ? JSON.stringify(publishAllowedTo) : existingLocation.publishAllowedTo,
+                    latitude: isSuperAdmin && latitude !== undefined ? parseFloat(latitude) : existingLocation.latitude,
+                    longitude: isSuperAdmin && longitude !== undefined ? parseFloat(longitude) : existingLocation.longitude,
+                    parkingType: isSuperAdmin && parkingType !== undefined ? parkingType : existingLocation.parkingType,
+                    suboperatorName: isSuperAdmin && suboperatorName !== undefined ? suboperatorName : existingLocation.suboperatorName,
+                    suboperatorWebsite: isSuperAdmin && suboperatorWebsite !== undefined ? suboperatorWebsite : existingLocation.suboperatorWebsite,
+                    suboperatorLogoUrl: isSuperAdmin && suboperatorLogoUrl !== undefined ? suboperatorLogoUrl : existingLocation.suboperatorLogoUrl,
+                    chargingWhenClosed: isSuperAdmin ? (chargingWhenClosed ?? existingLocation.chargingWhenClosed) : existingLocation.chargingWhenClosed,
+
+                    name: isSuperAdmin && name !== undefined ? name : existingLocation.name,
+                    address: isSuperAdmin && address !== undefined ? address : existingLocation.address,
+                    postcode: isSuperAdmin && postcode !== undefined ? postcode : existingLocation.postcode,
+                    city: isSuperAdmin && city !== undefined ? city : existingLocation.city,
+                    state: isSuperAdmin && state !== undefined ? state : existingLocation.state,
+                    countryCode: isSuperAdmin && countryCode !== undefined ? countryCode : existingLocation.countryCode,
+                    partyId: isSuperAdmin && partyId !== undefined ? partyId : existingLocation.partyId,
+                    countryISO: isSuperAdmin && countryISO !== undefined ? countryISO : existingLocation.countryISO,
                     // Moderation approval and operator reassignment are Super Admin-only -
                     // a company's own admins must not self-approve or move their own site
                     // to a different operator (see locationController.updateLocation).
@@ -1169,10 +1177,10 @@ exports.updateLocationMetadata = async (req, res) => {
                         data: {
                             floorLevel: evseItem.floor_level !== undefined ? evseItem.floor_level : undefined,
                             parkingRestrictions: evseItem.parking_restrictions !== undefined ? evseItem.parking_restrictions : undefined,
-                            ...(evseItem.latitude && { evseLatitude: parseFloat(evseItem.latitude) }),
-                            ...(evseItem.longitude && { evseLongitude: parseFloat(evseItem.longitude) }),
                             ...(evseItem.directions && { directions: typeof evseItem.directions === 'object' ? JSON.stringify(evseItem.directions) : evseItem.directions }),
-                            ...(evseItem.images && { evseImages: JSON.stringify(evseItem.images) })
+                            ...(evseItem.images && { evseImages: JSON.stringify(evseItem.images) }),
+                            ...(isSuperAdmin && evseItem.latitude && { evseLatitude: parseFloat(evseItem.latitude) }),
+                            ...(isSuperAdmin && evseItem.longitude && { evseLongitude: parseFloat(evseItem.longitude) })
                         }
                     });
                 }

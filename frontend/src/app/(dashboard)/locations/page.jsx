@@ -5,7 +5,7 @@ import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import BrandLoader from '@/components/BrandLoader';
 import {
-    Plus, MapPin, Edit2, Trash2, X, Globe, Eye,
+    MapPin, Edit2, Trash2, X, Globe, Eye,
     AlertCircle, CheckCircle2, Clock, Coffee,
     Building2, Navigation, Info, Upload, Image as ImageIcon,
     Zap, ExternalLink, Calendar, Hash, ShieldCheck, Copy, Check
@@ -195,13 +195,7 @@ export default function LocationsPage() {
                     </div>
                 </div>
 
-                <button
-                    onClick={() => openModal('create')}
-                    className="flex cursor-pointer items-center justify-center gap-2 bg-slate-950 text-white px-4 py-2.5 rounded-xl hover:bg-slate-800 text-sm font-medium transition-all"
-                >
-                    <Plus size={14} strokeWidth={2.5} />
-                    <span>Add location</span>
-                </button>
+                {/* Location creation from the portal is paused for now - intentionally hidden. */}
             </div>
 
             {/* Filter Bar */}

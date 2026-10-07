@@ -81,13 +81,13 @@ function TagInput({ values, onAdd, onRemove, placeholder, draft, onDraftChange }
     );
 }
 
-function ToggleRow({ icon: Icon, label, description, checked, onChange, tone = 'emerald' }) {
+function ToggleRow({ icon: Icon, label, description, checked, onChange, tone = 'emerald', disabled = false }) {
     const toneClasses = checked
         ? (tone === 'emerald' ? 'text-emerald-600' : 'text-indigo-600')
         : 'text-slate-300';
 
     return (
-        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+        <div className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 ${disabled ? 'opacity-60' : ''}`}>
             <div className="flex items-start space-x-3 min-w-0 pr-4">
                 {Icon && <Icon size={16} className="mt-0.5 shrink-0 text-slate-400" />}
                 <div className="min-w-0">
@@ -95,9 +95,20 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, tone = '
                     <span className="text-xs text-slate-400 font-medium">{description}</span>
                 </div>
             </div>
-            <button type="button" onClick={onChange} className={`shrink-0 cursor-pointer hover:scale-105 transition-transform ${toneClasses}`}>
+            <button type="button" disabled={disabled} onClick={onChange} className={`shrink-0 transition-transform ${toneClasses} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}>
                 {checked ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
             </button>
+        </div>
+    );
+}
+
+function ReadOnlyField({ icon, children, value, placeholder = 'Not set' }) {
+    return (
+        <div>
+            <FieldLabel icon={icon}>{children}</FieldLabel>
+            <div className={`${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed truncate`}>
+                {value || <span className="italic text-slate-400">{placeholder}</span>}
+            </div>
         </div>
     );
 }
@@ -560,7 +571,7 @@ function EnrichFormContent() {
                     </div>
 
                     <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
-                        {/* Quick shortcuts - everything here is editable, these just jump to the relevant tab */}
+                        {/* Quick shortcuts - just jump to the relevant tab */}
                         <button
                             type="button"
                             onClick={() => setActiveTab('basic')}
@@ -626,53 +637,77 @@ function EnrichFormContent() {
                 {/* --- Basic Info (core registration details) --- */}
                 {activeTab === 'basic' && (
                     <div className="space-y-5">
-                        <SectionCard icon={PencilLine} title="Site Identity" description="Name and address shown across the portal and public feed" tone="amber">
+                        <SectionCard icon={PencilLine} title="Site Identity" description={isSuperAdmin ? "Name and address shown across the portal and public feed" : "Core registration details - read-only, managed by the platform operator"} tone="amber">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="sm:col-span-2">
-                                    <FieldLabel>Site Name</FieldLabel>
-                                    <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputClass} placeholder="e.g. Spencer Dock Hub" />
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <FieldLabel>Address</FieldLabel>
-                                    <input type="text" required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className={inputClass} placeholder="Street address" />
-                                </div>
-                                <div>
-                                    <FieldLabel>City</FieldLabel>
-                                    <input type="text" required value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className={inputClass} />
-                                </div>
-                                <div>
-                                    <FieldLabel>Postcode</FieldLabel>
-                                    <input type="text" required value={formData.postcode} onChange={(e) => setFormData({ ...formData, postcode: e.target.value })} className={`${inputClass} font-mono uppercase`} />
-                                </div>
-                                <div>
-                                    <FieldLabel>State / Region</FieldLabel>
-                                    <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className={inputClass} placeholder="Optional" />
-                                </div>
-                                <div>
-                                    <FieldLabel>Party ID</FieldLabel>
-                                    <input type="text" value={formData.partyId} onChange={(e) => setFormData({ ...formData, partyId: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="CEV" />
-                                </div>
-                                <div>
-                                    <FieldLabel>Country Code</FieldLabel>
-                                    <input type="text" value={formData.countryCode} onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="GB" />
-                                </div>
-                                <div>
-                                    <FieldLabel>Country (ISO-3)</FieldLabel>
-                                    <input type="text" value={formData.countryISO} onChange={(e) => setFormData({ ...formData, countryISO: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="GBR" />
-                                </div>
+                                {isSuperAdmin ? (
+                                    <>
+                                        <div className="sm:col-span-2">
+                                            <FieldLabel>Site Name</FieldLabel>
+                                            <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputClass} placeholder="e.g. Spencer Dock Hub" />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <FieldLabel>Address</FieldLabel>
+                                            <input type="text" required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className={inputClass} placeholder="Street address" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>City</FieldLabel>
+                                            <input type="text" required value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className={inputClass} />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Postcode</FieldLabel>
+                                            <input type="text" required value={formData.postcode} onChange={(e) => setFormData({ ...formData, postcode: e.target.value })} className={`${inputClass} font-mono uppercase`} />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>State / Region</FieldLabel>
+                                            <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className={inputClass} placeholder="Optional" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Party ID</FieldLabel>
+                                            <input type="text" value={formData.partyId} onChange={(e) => setFormData({ ...formData, partyId: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="CEV" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Country Code</FieldLabel>
+                                            <input type="text" value={formData.countryCode} onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="GB" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Country (ISO-3)</FieldLabel>
+                                            <input type="text" value={formData.countryISO} onChange={(e) => setFormData({ ...formData, countryISO: e.target.value })} className={`${inputClass} font-mono uppercase`} placeholder="GBR" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="sm:col-span-2"><ReadOnlyField value={formData.name}>Site Name</ReadOnlyField></div>
+                                        <div className="sm:col-span-2"><ReadOnlyField value={formData.address}>Address</ReadOnlyField></div>
+                                        <ReadOnlyField value={formData.city}>City</ReadOnlyField>
+                                        <ReadOnlyField value={formData.postcode}>Postcode</ReadOnlyField>
+                                        <ReadOnlyField value={formData.state}>State / Region</ReadOnlyField>
+                                        <ReadOnlyField value={formData.partyId}>Party ID</ReadOnlyField>
+                                        <ReadOnlyField value={formData.countryCode}>Country Code</ReadOnlyField>
+                                        <ReadOnlyField value={formData.countryISO}>Country (ISO-3)</ReadOnlyField>
+                                    </>
+                                )}
                             </div>
                         </SectionCard>
 
                         <SectionCard icon={MapPin} title="Coordinates" description="Precise map position for this site">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <FieldLabel>Latitude</FieldLabel>
-                                    <input type="number" step="any" required value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: e.target.value })} className={`${inputClass} font-mono`} placeholder="51.507400" />
-                                </div>
-                                <div>
-                                    <FieldLabel>Longitude</FieldLabel>
-                                    <input type="number" step="any" required value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: e.target.value })} className={`${inputClass} font-mono`} placeholder="-0.127800" />
-                                </div>
+                                {isSuperAdmin ? (
+                                    <>
+                                        <div>
+                                            <FieldLabel>Latitude</FieldLabel>
+                                            <input type="number" step="any" required value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: e.target.value })} className={`${inputClass} font-mono`} placeholder="51.507400" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Longitude</FieldLabel>
+                                            <input type="number" step="any" required value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: e.target.value })} className={`${inputClass} font-mono`} placeholder="-0.127800" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ReadOnlyField value={formData.latitude}>Latitude</ReadOnlyField>
+                                        <ReadOnlyField value={formData.longitude}>Longitude</ReadOnlyField>
+                                    </>
+                                )}
                             </div>
                         </SectionCard>
 
@@ -708,7 +743,7 @@ function EnrichFormContent() {
                 {/* --- Overview & Access --- */}
                 {activeTab === 'overview' && (
                     <div className="space-y-5">
-                        <SectionCard icon={Globe} title="Public Feed Visibility" description="Controls whether this location appears on the open data feed" tone="emerald">
+                        <SectionCard icon={Globe} title="Public Feed Visibility" description={isSuperAdmin ? "Controls whether this location appears on the open data feed" : "Managed by the platform operator - read-only"} tone="emerald">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <ToggleRow
                                     icon={formData.publish ? Globe : EyeOff}
@@ -717,6 +752,7 @@ function EnrichFormContent() {
                                     checked={formData.publish}
                                     onChange={() => setFormData({ ...formData, publish: !formData.publish })}
                                     tone="emerald"
+                                    disabled={!isSuperAdmin}
                                 />
                                 <ToggleRow
                                     icon={Zap}
@@ -725,40 +761,54 @@ function EnrichFormContent() {
                                     checked={formData.chargingWhenClosed}
                                     onChange={() => setFormData({ ...formData, chargingWhenClosed: !formData.chargingWhenClosed })}
                                     tone="indigo"
+                                    disabled={!isSuperAdmin}
                                 />
                             </div>
                         </SectionCard>
 
-                        <SectionCard icon={Users} title="Publish Allowlist" description="Restrict visibility to specific tokens (leave empty to allow everyone)">
+                        <SectionCard icon={Users} title="Publish Allowlist" description={isSuperAdmin ? "Restrict visibility to specific tokens (leave empty to allow everyone)" : "Managed by the platform operator - read-only"}>
                             <div className="space-y-2.5">
+                                {formData.publishAllowedTo.length === 0 && (
+                                    <p className="text-xs text-slate-400 italic">No restrictions - visible to everyone.</p>
+                                )}
                                 {formData.publishAllowedTo.map((row, i) => (
-                                    <div key={i} className="flex flex-wrap items-center gap-2">
-                                        <input
-                                            type="text"
-                                            value={row.uid}
-                                            onChange={(e) => updatePublishAllowedRow(i, 'uid', e.target.value)}
-                                            placeholder="Token UID"
-                                            className={`${inputClass} flex-1 min-w-[140px] font-mono text-xs`}
-                                        />
-                                        <select
-                                            value={row.type}
-                                            onChange={(e) => updatePublishAllowedRow(i, 'type', e.target.value)}
-                                            className={`${selectClass} w-full sm:w-40 shrink-0`}
-                                        >
-                                            <option value="RFID">RFID</option>
-                                            <option value="AD_HOC_USER">AD HOC USER</option>
-                                            <option value="APP_USER">APP USER</option>
-                                            <option value="OTHER">OTHER</option>
-                                        </select>
-                                        <button type="button" onClick={() => removePublishAllowedRow(i)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer shrink-0">
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
+                                    isSuperAdmin ? (
+                                        <div key={i} className="flex flex-wrap items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={row.uid}
+                                                onChange={(e) => updatePublishAllowedRow(i, 'uid', e.target.value)}
+                                                placeholder="Token UID"
+                                                className={`${inputClass} flex-1 min-w-[140px] font-mono text-xs`}
+                                            />
+                                            <select
+                                                value={row.type}
+                                                onChange={(e) => updatePublishAllowedRow(i, 'type', e.target.value)}
+                                                className={`${selectClass} w-full sm:w-40 shrink-0`}
+                                            >
+                                                <option value="RFID">RFID</option>
+                                                <option value="AD_HOC_USER">AD HOC USER</option>
+                                                <option value="APP_USER">APP USER</option>
+                                                <option value="OTHER">OTHER</option>
+                                            </select>
+                                            <button type="button" onClick={() => removePublishAllowedRow(i)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer shrink-0">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div key={i} className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-xl px-3 py-2">
+                                            <span className="font-mono">{row.uid}</span>
+                                            <span className="text-slate-400">·</span>
+                                            <span>{row.type}</span>
+                                        </div>
+                                    )
                                 ))}
-                                <button type="button" onClick={addPublishAllowedRow} className="inline-flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer">
-                                    <Plus size={12} strokeWidth={2.5} />
-                                    <span>Add allowed token</span>
-                                </button>
+                                {isSuperAdmin && (
+                                    <button type="button" onClick={addPublishAllowedRow} className="inline-flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-colors cursor-pointer">
+                                        <Plus size={12} strokeWidth={2.5} />
+                                        <span>Add allowed token</span>
+                                    </button>
+                                )}
                             </div>
                         </SectionCard>
                     </div>
@@ -769,24 +819,33 @@ function EnrichFormContent() {
                     <div className="space-y-5">
                         <SectionCard icon={MapPin} title="Site Configuration" description="Core parameters mapping directly to the public feed">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <FieldLabel>Parking Structure Type</FieldLabel>
-                                    <select value={formData.parkingType} onChange={(e) => setFormData({ ...formData, parkingType: e.target.value })} className={selectClass}>
-                                        <option value="UNKNOWN">Unknown</option>
-                                        <option value="ON_STREET">On Street</option>
-                                        <option value="OFF_STREET">Off Street</option>
-                                        <option value="PARKING_GARAGE">Parking Garage</option>
-                                        <option value="MALL_PARKING">Mall Lot</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <FieldLabel>Time Zone</FieldLabel>
-                                    <select value={formData.timeZone} onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })} className={selectClass}>
-                                        <option value="Europe/London">Europe/London</option>
-                                        <option value="Europe/Paris">Europe/Paris</option>
-                                        <option value="UTC">UTC Standard</option>
-                                    </select>
-                                </div>
+                                {isSuperAdmin ? (
+                                    <>
+                                        <div>
+                                            <FieldLabel>Parking Structure Type</FieldLabel>
+                                            <select value={formData.parkingType} onChange={(e) => setFormData({ ...formData, parkingType: e.target.value })} className={selectClass}>
+                                                <option value="UNKNOWN">Unknown</option>
+                                                <option value="ON_STREET">On Street</option>
+                                                <option value="OFF_STREET">Off Street</option>
+                                                <option value="PARKING_GARAGE">Parking Garage</option>
+                                                <option value="MALL_PARKING">Mall Lot</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Time Zone</FieldLabel>
+                                            <select value={formData.timeZone} onChange={(e) => setFormData({ ...formData, timeZone: e.target.value })} className={selectClass}>
+                                                <option value="Europe/London">Europe/London</option>
+                                                <option value="Europe/Paris">Europe/Paris</option>
+                                                <option value="UTC">UTC Standard</option>
+                                            </select>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ReadOnlyField value={formData.parkingType}>Parking Structure Type</ReadOnlyField>
+                                        <ReadOnlyField value={formData.timeZone}>Time Zone</ReadOnlyField>
+                                    </>
+                                )}
                             </div>
 
                             <div>
@@ -870,20 +929,30 @@ function EnrichFormContent() {
                 {/* --- Energy & Operator --- */}
                 {activeTab === 'energy' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <SectionCard icon={Layers} title="Suboperator" description="Third party operating this site, if any">
+                        <SectionCard icon={Layers} title="Suboperator" description={isSuperAdmin ? "Third party operating this site, if any" : "Managed by the platform operator - read-only"}>
                             <div className="space-y-3">
-                                <div>
-                                    <FieldLabel>Name</FieldLabel>
-                                    <input type="text" value={formData.suboperatorName} onChange={(e) => setFormData({ ...formData, suboperatorName: e.target.value })} className={inputClass} placeholder="Suboperator Name" />
-                                </div>
-                                <div>
-                                    <FieldLabel>Website</FieldLabel>
-                                    <input type="text" value={formData.suboperatorWebsite} onChange={(e) => setFormData({ ...formData, suboperatorWebsite: e.target.value })} className={inputClass} placeholder="https://..." />
-                                </div>
-                                <div>
-                                    <FieldLabel>Logo URL</FieldLabel>
-                                    <input type="text" value={formData.suboperatorLogoUrl} onChange={(e) => setFormData({ ...formData, suboperatorLogoUrl: e.target.value })} className={inputClass} placeholder="https://..." />
-                                </div>
+                                {isSuperAdmin ? (
+                                    <>
+                                        <div>
+                                            <FieldLabel>Name</FieldLabel>
+                                            <input type="text" value={formData.suboperatorName} onChange={(e) => setFormData({ ...formData, suboperatorName: e.target.value })} className={inputClass} placeholder="Suboperator Name" />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Website</FieldLabel>
+                                            <input type="text" value={formData.suboperatorWebsite} onChange={(e) => setFormData({ ...formData, suboperatorWebsite: e.target.value })} className={inputClass} placeholder="https://..." />
+                                        </div>
+                                        <div>
+                                            <FieldLabel>Logo URL</FieldLabel>
+                                            <input type="text" value={formData.suboperatorLogoUrl} onChange={(e) => setFormData({ ...formData, suboperatorLogoUrl: e.target.value })} className={inputClass} placeholder="https://..." />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ReadOnlyField value={formData.suboperatorName}>Name</ReadOnlyField>
+                                        <ReadOnlyField value={formData.suboperatorWebsite}>Website</ReadOnlyField>
+                                        <ReadOnlyField value={formData.suboperatorLogoUrl}>Logo URL</ReadOnlyField>
+                                    </>
+                                )}
                             </div>
                         </SectionCard>
 
@@ -969,14 +1038,23 @@ function EnrichFormContent() {
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <FieldLabel>Latitude Override</FieldLabel>
-                                                    <input type="text" value={evse.latitude} onChange={(e) => handleEvseChange(evseIndex, 'latitude', e.target.value)} className={`${inputClass} font-mono`} placeholder="Optional override" />
-                                                </div>
-                                                <div>
-                                                    <FieldLabel>Longitude Override</FieldLabel>
-                                                    <input type="text" value={evse.longitude} onChange={(e) => handleEvseChange(evseIndex, 'longitude', e.target.value)} className={`${inputClass} font-mono`} placeholder="Optional override" />
-                                                </div>
+                                                {isSuperAdmin ? (
+                                                    <>
+                                                        <div>
+                                                            <FieldLabel>Latitude Override</FieldLabel>
+                                                            <input type="text" value={evse.latitude} onChange={(e) => handleEvseChange(evseIndex, 'latitude', e.target.value)} className={`${inputClass} font-mono`} placeholder="Optional override" />
+                                                        </div>
+                                                        <div>
+                                                            <FieldLabel>Longitude Override</FieldLabel>
+                                                            <input type="text" value={evse.longitude} onChange={(e) => handleEvseChange(evseIndex, 'longitude', e.target.value)} className={`${inputClass} font-mono`} placeholder="Optional override" />
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ReadOnlyField value={evse.latitude} placeholder="No override">Latitude Override</ReadOnlyField>
+                                                        <ReadOnlyField value={evse.longitude} placeholder="No override">Longitude Override</ReadOnlyField>
+                                                    </>
+                                                )}
                                             </div>
 
                                             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">

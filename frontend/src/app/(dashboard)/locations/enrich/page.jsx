@@ -9,7 +9,7 @@ import {
     ArrowLeft, Globe, Save, ShieldAlert, CheckCircle2,
     MapPin, Building2, HelpCircle, ToggleLeft, ToggleRight, Zap, Layers,
     Image as ImageIcon, EyeOff, Plus, Trash2, Tag, X, ChevronDown, Compass, Users,
-    Navigation, Radio, Info, PencilLine, Upload, ShieldCheck
+    Navigation, Radio, Info, PencilLine, Upload, ShieldCheck, Lock
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -26,13 +26,24 @@ const TABS = [
     { key: 'evses', label: 'Charging Units', icon: Layers }
 ];
 
-function FieldLabel({ icon: Icon, children, hint }) {
+function FieldLabel({ icon: Icon, children, hint, trailing }) {
     return (
-        <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
-            {Icon && <Icon size={13} className="mr-1.5 text-slate-400" />}
-            {children}
-            {hint && <span className="ml-1.5 font-normal text-slate-400 normal-case">{hint}</span>}
-        </label>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label className="flex items-center text-xs font-semibold text-slate-600">
+                {Icon && <Icon size={13} className="mr-1.5 text-slate-400" />}
+                {children}
+                {hint && <span className="ml-1.5 font-normal text-slate-400 normal-case">{hint}</span>}
+            </label>
+            {trailing}
+        </div>
+    );
+}
+
+function EditableBadge() {
+    return (
+        <span className="inline-flex shrink-0 items-center text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+            Editable
+        </span>
     );
 }
 
@@ -81,53 +92,73 @@ function TagInput({ values, onAdd, onRemove, placeholder, draft, onDraftChange }
     );
 }
 
+function LockedBadge({ className = '' }) {
+    return (
+        <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-slate-100 border border-slate-200 rounded-full px-2 py-1 ${className}`}>
+            <Lock size={10} strokeWidth={2.5} /> Locked
+        </span>
+    );
+}
+
 function ToggleRow({ icon: Icon, label, description, checked, onChange, tone = 'emerald', disabled = false }) {
     const toneClasses = checked
         ? (tone === 'emerald' ? 'text-emerald-600' : 'text-indigo-600')
         : 'text-slate-300';
 
     return (
-        <div className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 ${disabled ? 'opacity-60' : ''}`}>
+        <div className={`flex items-center justify-between p-4 rounded-2xl border ${disabled ? 'bg-slate-50/60 border-dashed border-slate-300' : 'bg-slate-50 border-slate-200'}`}>
             <div className="flex items-start space-x-3 min-w-0 pr-4">
-                {Icon && <Icon size={16} className="mt-0.5 shrink-0 text-slate-400" />}
+                {Icon && <Icon size={16} className={`mt-0.5 shrink-0 ${disabled ? 'text-slate-300' : 'text-slate-400'}`} />}
                 <div className="min-w-0">
-                    <span className="text-sm font-semibold text-slate-800 block">{label}</span>
+                    <span className={`text-sm font-semibold block ${disabled ? 'text-slate-400' : 'text-slate-800'}`}>{label}</span>
                     <span className="text-xs text-slate-400 font-medium">{description}</span>
                 </div>
             </div>
-            <button type="button" disabled={disabled} onClick={onChange} className={`shrink-0 transition-transform ${toneClasses} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}>
-                {checked ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
-            </button>
+            {disabled ? (
+                <LockedBadge />
+            ) : (
+                <button type="button" onClick={onChange} className={`shrink-0 cursor-pointer hover:scale-105 transition-transform ${toneClasses}`}>
+                    {checked ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
+                </button>
+            )}
         </div>
     );
 }
 
-function ReadOnlyField({ icon, children, value, placeholder = 'Not set' }) {
+// Deliberately styled to look nothing like an editable input (dashed border,
+// washed-out fill, muted text, lock icon) - an earlier flat-grey treatment was
+// too close to the real input style and hosts couldn't tell edit vs. locked apart.
+function ReadOnlyField({ children, value, placeholder = 'Not set' }) {
     return (
         <div>
-            <FieldLabel icon={icon}>{children}</FieldLabel>
-            <div className={`${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed truncate`}>
-                {value || <span className="italic text-slate-400">{placeholder}</span>}
+            <FieldLabel icon={Lock} hint="Locked">{children}</FieldLabel>
+            <div className="w-full px-3 py-2.5 bg-slate-50/60 border border-dashed border-slate-300 rounded-xl text-sm font-medium text-slate-400 cursor-not-allowed truncate">
+                {value || <span className="italic text-slate-300">{placeholder}</span>}
             </div>
         </div>
     );
 }
 
-function SectionCard({ icon: Icon, title, description, children, tone = 'indigo' }) {
-    const toneClasses = tone === 'amber'
-        ? 'bg-amber-50 text-amber-600 border-amber-100'
-        : tone === 'emerald'
-            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-            : 'bg-indigo-50 text-indigo-600 border-indigo-100';
+function SectionCard({ icon: Icon, title, description, children, tone = 'indigo', locked = false }) {
+    const toneClasses = locked
+        ? 'bg-slate-100 text-slate-400 border-slate-200'
+        : tone === 'amber'
+            ? 'bg-amber-50 text-amber-600 border-amber-100'
+            : tone === 'emerald'
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                : 'bg-indigo-50 text-indigo-600 border-indigo-100';
 
     return (
         <div className="bg-white p-6 md:p-7 rounded-3xl border border-slate-200/70 shadow-xs space-y-5">
-            <div className="flex items-center space-x-3 border-b border-slate-100 pb-4">
-                <div className={`p-2.5 rounded-xl border ${toneClasses}`}><Icon size={17} strokeWidth={2.25} /></div>
-                <div>
-                    <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-                    {description && <p className="text-xs text-slate-400 font-medium">{description}</p>}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex items-center space-x-3 min-w-0">
+                    <div className={`p-2.5 rounded-xl border shrink-0 ${toneClasses}`}><Icon size={17} strokeWidth={2.25} /></div>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+                        {description && <p className="text-xs text-slate-400 font-medium">{description}</p>}
+                    </div>
                 </div>
+                {locked && <LockedBadge />}
             </div>
             {children}
         </div>
@@ -637,7 +668,7 @@ function EnrichFormContent() {
                 {/* --- Basic Info (core registration details) --- */}
                 {activeTab === 'basic' && (
                     <div className="space-y-5">
-                        <SectionCard icon={PencilLine} title="Site Identity" description={isSuperAdmin ? "Name and address shown across the portal and public feed" : "Core registration details - read-only, managed by the platform operator"} tone="amber">
+                        <SectionCard icon={PencilLine} title="Site Identity" description="Name and address shown across the portal and public feed" tone="amber" locked={!isSuperAdmin}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {isSuperAdmin ? (
                                     <>
@@ -689,7 +720,7 @@ function EnrichFormContent() {
                             </div>
                         </SectionCard>
 
-                        <SectionCard icon={MapPin} title="Coordinates" description="Precise map position for this site">
+                        <SectionCard icon={MapPin} title="Coordinates" description="Precise map position for this site" locked={!isSuperAdmin}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {isSuperAdmin ? (
                                     <>
@@ -711,20 +742,20 @@ function EnrichFormContent() {
                             </div>
                         </SectionCard>
 
-                        <SectionCard icon={ShieldCheck} title="Operator & Moderation" description="Who owns this site and whether it's approved for the public feed">
+                        <SectionCard icon={ShieldCheck} title="Operator & Moderation" description="Who owns this site and whether it's approved for the public feed" locked={!isSuperAdmin}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <FieldLabel icon={Building2}>Operator</FieldLabel>
-                                    {isSuperAdmin ? (
+                                {isSuperAdmin ? (
+                                    <div>
+                                        <FieldLabel icon={Building2}>Operator</FieldLabel>
                                         <select value={formData.companyId} onChange={(e) => setFormData({ ...formData, companyId: e.target.value })} className={selectClass}>
                                             {companies.map((c) => (
                                                 <option key={c.id} value={c.id}>{c.name}</option>
                                             ))}
                                         </select>
-                                    ) : (
-                                        <input type="text" disabled value={formData.companyName} className={`${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed`} />
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <ReadOnlyField value={formData.companyName}>Operator</ReadOnlyField>
+                                )}
                             </div>
                             {isSuperAdmin && (
                                 <ToggleRow
@@ -743,7 +774,7 @@ function EnrichFormContent() {
                 {/* --- Overview & Access --- */}
                 {activeTab === 'overview' && (
                     <div className="space-y-5">
-                        <SectionCard icon={Globe} title="Public Feed Visibility" description={isSuperAdmin ? "Controls whether this location appears on the open data feed" : "Managed by the platform operator - read-only"} tone="emerald">
+                        <SectionCard icon={Globe} title="Public Feed Visibility" description="Controls whether this location appears on the open data feed" tone="emerald" locked={!isSuperAdmin}>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <ToggleRow
                                     icon={formData.publish ? Globe : EyeOff}
@@ -766,7 +797,7 @@ function EnrichFormContent() {
                             </div>
                         </SectionCard>
 
-                        <SectionCard icon={Users} title="Publish Allowlist" description={isSuperAdmin ? "Restrict visibility to specific tokens (leave empty to allow everyone)" : "Managed by the platform operator - read-only"}>
+                        <SectionCard icon={Users} title="Publish Allowlist" description="Restrict visibility to specific tokens (leave empty to allow everyone)" locked={!isSuperAdmin}>
                             <div className="space-y-2.5">
                                 {formData.publishAllowedTo.length === 0 && (
                                     <p className="text-xs text-slate-400 italic">No restrictions - visible to everyone.</p>
@@ -849,7 +880,7 @@ function EnrichFormContent() {
                             </div>
 
                             <div>
-                                <FieldLabel icon={Tag}>Facilities & Amenities</FieldLabel>
+                                <FieldLabel icon={Tag} trailing={!isSuperAdmin && <EditableBadge />}>Facilities & Amenities</FieldLabel>
                                 <TagInput
                                     values={formData.facilities}
                                     onAdd={addFacility}
@@ -861,7 +892,7 @@ function EnrichFormContent() {
                             </div>
 
                             <div>
-                                <FieldLabel icon={HelpCircle}>Site Entry Directions</FieldLabel>
+                                <FieldLabel icon={HelpCircle} trailing={!isSuperAdmin && <EditableBadge />}>Site Entry Directions</FieldLabel>
                                 <textarea rows={3} value={formData.directions} onChange={(e) => setFormData({ ...formData, directions: e.target.value })} className={`${inputClass} resize-none`} placeholder="Provide entry directions for EV drivers..." />
                             </div>
                         </SectionCard>
@@ -929,7 +960,7 @@ function EnrichFormContent() {
                 {/* --- Energy & Operator --- */}
                 {activeTab === 'energy' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <SectionCard icon={Layers} title="Suboperator" description={isSuperAdmin ? "Third party operating this site, if any" : "Managed by the platform operator - read-only"}>
+                        <SectionCard icon={Layers} title="Suboperator" description="Third party operating this site, if any" locked={!isSuperAdmin}>
                             <div className="space-y-3">
                                 {isSuperAdmin ? (
                                     <>
@@ -1016,17 +1047,17 @@ function EnrichFormContent() {
                                         <div className="px-5 pb-5 pt-1 space-y-4 border-t border-slate-100">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
                                                 <div>
-                                                    <FieldLabel>Floor Level Placement</FieldLabel>
+                                                    <FieldLabel trailing={!isSuperAdmin && <EditableBadge />}>Floor Level Placement</FieldLabel>
                                                     <input type="text" value={evse.floor_level} onChange={(e) => handleEvseChange(evseIndex, 'floor_level', e.target.value)} className={inputClass} placeholder="Ground, Floor -1" />
                                                 </div>
                                                 <div>
-                                                    <FieldLabel icon={Navigation}>Bay Directions</FieldLabel>
+                                                    <FieldLabel icon={Navigation} trailing={!isSuperAdmin && <EditableBadge />}>Bay Directions</FieldLabel>
                                                     <input type="text" value={evse.directions} onChange={(e) => handleEvseChange(evseIndex, 'directions', e.target.value)} className={inputClass} placeholder="Next to pillar 4..." />
                                                 </div>
                                             </div>
 
                                             <div>
-                                                <FieldLabel icon={Tag}>Parking Restrictions</FieldLabel>
+                                                <FieldLabel icon={Tag} trailing={!isSuperAdmin && <EditableBadge />}>Parking Restrictions</FieldLabel>
                                                 <TagInput
                                                     values={evse.parking_restrictions || []}
                                                     onAdd={(v) => addEvseParkingRestriction(evseIndex, v)}
@@ -1059,7 +1090,7 @@ function EnrichFormContent() {
 
                                             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
                                                 <div className="flex items-center justify-between">
-                                                    <FieldLabel icon={ImageIcon}>Charger Bay Photos</FieldLabel>
+                                                    <FieldLabel icon={ImageIcon} trailing={!isSuperAdmin && <EditableBadge />}>Charger Bay Photos</FieldLabel>
                                                     <button type="button" onClick={() => addEvseImageRow(evseIndex)} className="inline-flex items-center space-x-1 text-[11px] font-semibold px-2 py-1 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
                                                         <Plus size={11} strokeWidth={2.5} />
                                                         <span>Add Image</span>

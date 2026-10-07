@@ -662,6 +662,36 @@ export default function LocationsPage() {
                                         </div>
                                     </div>
 
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Party ID</label>
+                                            <input
+                                                type="text" placeholder="CEV"
+                                                value={formData.partyId}
+                                                onChange={(e) => setFormData({ ...formData, partyId: e.target.value.toUpperCase() })}
+                                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-mono uppercase text-xs font-semibold text-slate-800 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Country Code</label>
+                                            <input
+                                                type="text" placeholder="GB"
+                                                value={formData.countryCode}
+                                                onChange={(e) => setFormData({ ...formData, countryCode: e.target.value.toUpperCase() })}
+                                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-mono uppercase text-xs font-semibold text-slate-800 outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Country (ISO-3)</label>
+                                            <input
+                                                type="text" placeholder="GBR"
+                                                value={formData.countryISO}
+                                                onChange={(e) => setFormData({ ...formData, countryISO: e.target.value.toUpperCase() })}
+                                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-mono uppercase text-xs font-semibold text-slate-800 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Latitude</label>

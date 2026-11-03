@@ -94,6 +94,7 @@ function TagInput({ values, onAdd, onRemove, placeholder, draft, onDraftChange }
 
 function GalleryThumbnail({ url }) {
     const [broken, setBroken] = useState(false);
+    const [open, setOpen] = useState(false);
     const hasUrl = url && url.trim().length > 0;
 
     if (!hasUrl || broken) {
@@ -105,14 +106,35 @@ function GalleryThumbnail({ url }) {
     }
 
     return (
-        <button
-            type="button"
-            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-            className="w-11 h-11 rounded-lg border border-slate-200 overflow-hidden shrink-0 bg-slate-100 hover:ring-2 hover:ring-indigo-300 transition-shadow cursor-pointer"
-            title="View full image"
-        >
-            <img src={url} alt="Gallery preview" className="w-full h-full object-cover" onError={() => setBroken(true)} />
-        </button>
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="w-11 h-11 rounded-lg border border-slate-200 overflow-hidden shrink-0 bg-slate-100 hover:ring-2 hover:ring-indigo-300 transition-shadow cursor-pointer"
+                title="View full size"
+            >
+                <img src={url} alt="Gallery preview" className="w-full h-full object-cover" onError={() => setBroken(true)} />
+            </button>
+
+            {open && (
+                <div
+                    className="fixed inset-0 z-100 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150"
+                    onClick={() => setOpen(false)}
+                >
+                    <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+                        <img src={url} alt="Full size preview" className="max-w-full max-h-[80vh] w-auto h-auto mx-auto rounded-2xl shadow-2xl object-contain bg-slate-900" />
+                        <button
+                            type="button"
+                            onClick={() => setOpen(false)}
+                            className="absolute -top-3 -right-3 p-1.5 bg-white text-slate-700 rounded-full shadow-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Close"
+                        >
+                            <X size={16} strokeWidth={2.5} />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 
@@ -1123,6 +1145,7 @@ function EnrichFormContent() {
                                                 </div>
                                                 {evse.images.map((url, imgIndex) => (
                                                     <div key={imgIndex} className="flex items-center space-x-2">
+                                                        <GalleryThumbnail key={url} url={url} />
                                                         <input
                                                             type="text"
                                                             value={url}

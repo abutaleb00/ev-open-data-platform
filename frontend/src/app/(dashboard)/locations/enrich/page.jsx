@@ -92,6 +92,30 @@ function TagInput({ values, onAdd, onRemove, placeholder, draft, onDraftChange }
     );
 }
 
+function GalleryThumbnail({ url }) {
+    const [broken, setBroken] = useState(false);
+    const hasUrl = url && url.trim().length > 0;
+
+    if (!hasUrl || broken) {
+        return (
+            <div className="w-11 h-11 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+                <ImageIcon size={15} className="text-slate-300" />
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+            className="w-11 h-11 rounded-lg border border-slate-200 overflow-hidden shrink-0 bg-slate-100 hover:ring-2 hover:ring-indigo-300 transition-shadow cursor-pointer"
+            title="View full image"
+        >
+            <img src={url} alt="Gallery preview" className="w-full h-full object-cover" onError={() => setBroken(true)} />
+        </button>
+    );
+}
+
 function LockedBadge({ className = '' }) {
     return (
         <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-slate-100 border border-slate-200 rounded-full px-2 py-1 ${className}`}>
@@ -936,6 +960,7 @@ function EnrichFormContent() {
                             )}
                             {formData.locationImages.map((url, index) => (
                                 <div key={index} className="flex items-center space-x-2">
+                                    <GalleryThumbnail key={url} url={url} />
                                     <input
                                         type="text"
                                         value={url}

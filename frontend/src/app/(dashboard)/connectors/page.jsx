@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import { useAuthStore } from '@/store/authStore';
 import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Zap, Edit2, Trash2, X, Info,
@@ -10,6 +11,9 @@ import {
 } from 'lucide-react';
 
 export default function ConnectorsPage() {
+    const { user } = useAuthStore();
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
     // Data States
     const [connectors, setConnectors] = useState([]);
     const [chargePoints, setChargePoints] = useState([]);
@@ -274,12 +278,16 @@ export default function ConnectorsPage() {
                                                 <button onClick={() => openModal('details', conn)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="View Full Specs">
                                                     <Eye size={15} />
                                                 </button>
-                                                <button onClick={() => openModal('edit', conn)} className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer" title="Configure Plug">
-                                                    <Edit2 size={15} />
-                                                </button>
-                                                <button onClick={() => openModal('delete', conn)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Drop Plug">
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                {isSuperAdmin && (
+                                                    <>
+                                                        <button onClick={() => openModal('edit', conn)} className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer" title="Configure Plug">
+                                                            <Edit2 size={15} />
+                                                        </button>
+                                                        <button onClick={() => openModal('delete', conn)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Drop Plug">
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

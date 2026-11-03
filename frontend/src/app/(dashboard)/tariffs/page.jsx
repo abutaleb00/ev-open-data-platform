@@ -73,6 +73,7 @@ const emptyForm = (companyId = '') => ({
 
 export default function TariffsPage() {
     const { user } = useAuthStore();
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
     const [tariffs, setTariffs] = useState([]);
     const [companies, setCompanies] = useState([]);
@@ -328,12 +329,16 @@ export default function TariffsPage() {
                                                 <button onClick={() => openModal('view', t)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View Tariff Details">
                                                     <Eye size={14} strokeWidth={2.5} />
                                                 </button>
-                                                <button onClick={() => openModal('edit', t)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Edit Tariff">
-                                                    <Edit2 size={14} strokeWidth={2.5} />
-                                                </button>
-                                                <button onClick={() => openModal('delete', t)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Delete Tariff">
-                                                    <Trash2 size={14} strokeWidth={2.5} />
-                                                </button>
+                                                {isSuperAdmin && (
+                                                    <>
+                                                        <button onClick={() => openModal('edit', t)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Edit Tariff">
+                                                            <Edit2 size={14} strokeWidth={2.5} />
+                                                        </button>
+                                                        <button onClick={() => openModal('delete', t)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Delete Tariff">
+                                                            <Trash2 size={14} strokeWidth={2.5} />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

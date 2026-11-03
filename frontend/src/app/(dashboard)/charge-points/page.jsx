@@ -7,8 +7,23 @@ import BrandLoader from '@/components/BrandLoader';
 import {
     Plus, Zap, MapPin, Edit2, Trash2, Layers,
     X, AlertCircle, CheckCircle2, Clock, Server,
-    Eye, Info, Building2, Navigation, Plug
+    Eye, Info, Building2, Navigation, Plug, Lock
 } from 'lucide-react';
+
+function LockedField({ children, value, placeholder = 'Not set' }) {
+    return (
+        <div>
+            <label className="flex items-center text-[11px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                <Lock size={11} className="mr-1.5" />
+                {children}
+                <span className="ml-1.5 font-semibold normal-case">(Locked)</span>
+            </label>
+            <div className="w-full px-3 py-2 bg-slate-50/60 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-400 cursor-not-allowed truncate">
+                {value || <span className="italic text-slate-300">{placeholder}</span>}
+            </div>
+        </div>
+    );
+}
 
 export default function ChargePointsPage() {
     const { user } = useAuthStore();
@@ -282,9 +297,11 @@ export default function ChargePointsPage() {
                                                 <button onClick={() => openModal('edit', cp)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="Configure Unit">
                                                     <Edit2 size={15} />
                                                 </button>
-                                                <button onClick={() => openModal('delete', cp)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Decommission">
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                {isSuperAdmin && (
+                                                    <button onClick={() => openModal('delete', cp)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Decommission">
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -427,84 +444,117 @@ export default function ChargePointsPage() {
                                     </div>
                                 )}
 
-                                <div>
-                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Hardware Serial ID</label>
-                                    <input
-                                        type="text" required
-                                        value={formData.hardwareId}
-                                        onChange={(e) => setFormData({ ...formData, hardwareId: e.target.value })}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-900 focus:bg-white focus:border-slate-400 outline-none"
-                                        placeholder="e.g. *Ada*EGBEV0667A1"
-                                    />
-                                </div>
+                                {(() => {
+                                    const lockHostFields = modalMode === 'edit' && !isSuperAdmin;
+                                    const latSet = formData.evseLatitude !== '' && formData.evseLatitude !== null && formData.evseLatitude !== undefined;
+                                    const lngSet = formData.evseLongitude !== '' && formData.evseLongitude !== null && formData.evseLongitude !== undefined;
+                                    const lockLat = lockHostFields && latSet;
+                                    const lockLng = lockHostFields && lngSet;
+                                    const selectedLocationLabel = selectedCP?.locationName || locations.find(l => String(l.id) === String(formData.locationId))?.name;
 
-                                <div>
-                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Host Target Location Site</label>
-                                    <select
-                                        required
-                                        value={formData.locationId}
-                                        onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white outline-none cursor-pointer"
-                                    >
-                                        <option value="" disabled>Select physical installation hub...</option>
-                                        {locations.map(loc => (
-                                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.postcode || loc.postal_code})</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                    return (
+                                        <>
+                                            {lockHostFields ? (
+                                                <LockedField value={formData.hardwareId}>Hardware Serial ID</LockedField>
+                                            ) : (
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Hardware Serial ID</label>
+                                                    <input
+                                                        type="text" required
+                                                        value={formData.hardwareId}
+                                                        onChange={(e) => setFormData({ ...formData, hardwareId: e.target.value })}
+                                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-900 focus:bg-white focus:border-slate-400 outline-none"
+                                                        placeholder="e.g. *Ada*EGBEV0667A1"
+                                                    />
+                                                </div>
+                                            )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Operational Status</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
-                                        >
-                                            <option value="AVAILABLE">AVAILABLE</option>
-                                            <option value="OPERATIONAL">OPERATIONAL</option>
-                                            <option value="CHARGING">CHARGING</option>
-                                            <option value="PLANNED">PLANNED / BUILD</option>
-                                            <option value="OUT_OF_SERVICE">OUT OF SERVICE</option>
-                                            <option value="FAULTED">FAULTED</option>
-                                        </select>
-                                    </div>
+                                            {lockHostFields ? (
+                                                <LockedField value={selectedLocationLabel}>Host Target Location Site</LockedField>
+                                            ) : (
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Host Target Location Site</label>
+                                                    <select
+                                                        required
+                                                        value={formData.locationId}
+                                                        onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
+                                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="" disabled>Select physical installation hub...</option>
+                                                        {locations.map(loc => (
+                                                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.postcode || loc.postal_code})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
 
-                                    <div>
-                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Floor Level Context</label>
-                                        <input
-                                            type="text"
-                                            value={formData.floorLevel}
-                                            onChange={(e) => setFormData({ ...formData, floorLevel: e.target.value })}
-                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none"
-                                            placeholder="e.g. Ground, Floor -1"
-                                        />
-                                    </div>
-                                </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {lockHostFields ? (
+                                                    <LockedField value={formData.status}>Operational Status</LockedField>
+                                                ) : (
+                                                    <div>
+                                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Operational Status</label>
+                                                        <select
+                                                            value={formData.status}
+                                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                                                        >
+                                                            <option value="AVAILABLE">AVAILABLE</option>
+                                                            <option value="OPERATIONAL">OPERATIONAL</option>
+                                                            <option value="CHARGING">CHARGING</option>
+                                                            <option value="PLANNED">PLANNED / BUILD</option>
+                                                            <option value="OUT_OF_SERVICE">OUT OF SERVICE</option>
+                                                            <option value="FAULTED">FAULTED</option>
+                                                        </select>
+                                                    </div>
+                                                )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Latitude Override</label>
-                                        <input
-                                            type="number" step="any"
-                                            value={formData.evseLatitude}
-                                            onChange={(e) => setFormData({ ...formData, evseLatitude: e.target.value })}
-                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
-                                            placeholder="Optional override"
-                                        />
-                                    </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Floor Level Context</label>
+                                                    <input
+                                                        type="text"
+                                                        value={formData.floorLevel}
+                                                        onChange={(e) => setFormData({ ...formData, floorLevel: e.target.value })}
+                                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none"
+                                                        placeholder="e.g. Ground, Floor -1"
+                                                    />
+                                                </div>
+                                            </div>
 
-                                    <div>
-                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Longitude Override</label>
-                                        <input
-                                            type="number" step="any"
-                                            value={formData.evseLongitude}
-                                            onChange={(e) => setFormData({ ...formData, evseLongitude: e.target.value })}
-                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
-                                            placeholder="Optional override"
-                                        />
-                                    </div>
-                                </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {lockLat ? (
+                                                    <LockedField value={formData.evseLatitude}>Latitude Override</LockedField>
+                                                ) : (
+                                                    <div>
+                                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Latitude Override</label>
+                                                        <input
+                                                            type="number" step="any"
+                                                            value={formData.evseLatitude}
+                                                            onChange={(e) => setFormData({ ...formData, evseLatitude: e.target.value })}
+                                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
+                                                            placeholder="Optional override"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {lockLng ? (
+                                                    <LockedField value={formData.evseLongitude}>Longitude Override</LockedField>
+                                                ) : (
+                                                    <div>
+                                                        <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Longitude Override</label>
+                                                        <input
+                                                            type="number" step="any"
+                                                            value={formData.evseLongitude}
+                                                            onChange={(e) => setFormData({ ...formData, evseLongitude: e.target.value })}
+                                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-semibold outline-none"
+                                                            placeholder="Optional override"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
 
                                 {modalMode === 'edit' && isSuperAdmin && (
                                     <div className="pt-2">

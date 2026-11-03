@@ -9,6 +9,17 @@ const getClientIp = (req) => {
     return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : req.ip;
 };
 
+// Base origin to prefix uploaded file URLs with. Behind the production IIS/ARR reverse
+// proxy, req.get('host') resolves to the proxy's upstream target (127.0.0.1:5000), not
+// the public hostname, so uploaded image URLs end up pointing at the server's own
+// loopback address and are unreachable from any browser. API_PUBLIC_URL (e.g.
+// "https://api.evopen.co.uk") must be set in production to avoid that; falls back to
+// the request's own host for local/dev environments with no such proxy in front.
+const getPublicUploadsBase = (req) => {
+    if (process.env.API_PUBLIC_URL) return process.env.API_PUBLIC_URL.replace(/\/+$/, '');
+    return `${req.protocol}://${req.get('host')}`;
+};
+
 // Helper function to extract a file name from a public URL and purge it from the server's disk
 const purgePhysicalFile = (url) => {
     try {
@@ -240,9 +251,8 @@ exports.createLocation = async (req, res) => {
             });
 
             if (req.files && req.files.length > 0) {
-                const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
                 const mediaData = req.files.map(file => ({
-                    url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
+                    url: `${getPublicUploadsBase(req)}/uploads/locations/${file.filename}`,
                     type: file.mimetype,
                     category: "ENTRANCE",
                     locationId: location.id
@@ -347,9 +357,8 @@ exports.updateLocation = async (req, res) => {
         });
 
         if (req.files && req.files.length > 0) {
-            const hostUrl = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).host : req.get('host');
             const mediaData = req.files.map(file => ({
-                url: `${req.protocol}://${hostUrl}/uploads/locations/${file.filename}`,
+                url: `${getPublicUploadsBase(req)}/uploads/locations/${file.filename}`,
                 type: file.mimetype,
                 category: "ENTRANCE",
                 locationId: location.id
